@@ -58,6 +58,58 @@ T: dict[str, str] = {
     "msg_admin_verified": "管理员身份验证成功",
     "msg_no_candidates": "未找到该用户尚未观看的候选电影。",
     "msg_not_enough_overlap": "重叠评分数据不足，无法推荐相似电影。",
+    # Landing page
+    "landing_title": "FilmTrace",
+    "landing_subtitle": "智能电影推荐平台",
+    "landing_description": (
+        "基于 MovieLens 100K 数据集构建的智能电影推荐系统，"
+        "融合 UserCF、ItemCF、SVD 与数据分析能力，帮助用户发现感兴趣的电影。"
+    ),
+    "landing_user_button": "进入用户系统",
+    "landing_admin_button": "进入管理员后台",
+    "btn_back_to_landing": "返回首页",
+    # Auth
+    "auth_login_tab": "登录",
+    "auth_register_tab": "注册",
+    "label_email": "邮箱",
+    "label_confirm_password": "确认密码",
+    "btn_login": "登录",
+    "btn_register": "注册",
+    "btn_logout": "退出登录",
+    "msg_login_failed": "用户名/邮箱或密码错误，或账号已被禁用。",
+    "msg_register_success": "注册成功，正在为你进入新手引导...",
+    "msg_password_mismatch": "两次输入的密码不一致。",
+    # User-system navigation
+    "nav_user_home": "🏠 首页",
+    "nav_user_for_you": "🎬 为你推荐",
+    "nav_user_catalog": "📚 电影库",
+    "nav_user_favorites": "❤️ 我的收藏",
+    "nav_user_ratings": "⭐ 我的评分",
+    "nav_user_profile_analytics": "📊 我的画像",
+    "nav_user_account": "👤 个人中心",
+    "sidebar_section_discover": "发现",
+    "sidebar_section_personal": "个人",
+    # Admin-system navigation
+    "nav_admin_stats": "📊 数据统计中心",
+    "nav_admin_movies": "🎬 电影管理",
+    "nav_admin_users": "👥 用户管理",
+    "nav_admin_models": "🧠 推荐模型管理",
+    "nav_admin_audit": "📝 操作日志",
+    "nav_admin_monitor": "⚙️ 系统监控",
+    # Registration onboarding (genre preferences)
+    "label_onboarding_genres": "请选择你喜欢的电影类型（可多选）",
+    "msg_onboarding_genres_required": "请至少选择一种喜欢的电影类型。",
+    "label_user_preferred_genres": "你的偏好类型",
+    "recommendation_source_cf": "基于你的历史评分和协同过滤模型生成推荐。",
+    "recommendation_source_genre": "基于你注册时选择的电影类型进行冷启动推荐。",
+    "recommendation_source_popular": "暂无足够的个性化数据，为你展示全站热门高分电影。",
+    "label_recommendation_source": "推荐方式",
+    "profile_preferred_genres": "用户偏好类型",
+    "profile_preferred_genre_movie_count": "偏好类型电影数量",
+    "profile_recommendation_source": "推荐来源",
+    "profile_source_registration": "注册偏好",
+    "profile_source_history": "历史评分",
+    "profile_source_cf": "协同过滤",
 }
 
 
@@ -172,9 +224,9 @@ GENRE_ZH: dict[str, str] = {
     "Thriller": "惊悚",
     "War": "战争",
     "Western": "西部",
-    "Unknown": "未知",
-    "unknown": "未知",
-    "未知类型": "未知",
+    "Unknown": "未分类",
+    "unknown": "未分类",
+    "未知类型": "未分类",
 }
 
 
@@ -184,6 +236,31 @@ def get_display_title(title: str) -> str:
         if fragment in title:
             return zh_title
     return title
+
+
+# Chinese genre options offered on the registration / onboarding page.
+# Each entry must be a key in GENRE_EN_BY_ZH so it can be mapped back to a
+# MovieLens genre column for cold-start filtering.
+ONBOARDING_GENRES: list[str] = [
+    "动作",
+    "冒险",
+    "动画",
+    "儿童",
+    "喜剧",
+    "犯罪",
+    "纪录片",
+    "剧情",
+    "奇幻",
+    "黑色电影",
+    "恐怖",
+    "音乐",
+    "悬疑",
+    "爱情",
+    "科幻",
+    "惊悚",
+    "战争",
+    "西部",
+]
 
 
 # Reverse lookup: Chinese genre name -> English MovieLens genre column name.

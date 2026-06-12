@@ -41,6 +41,7 @@ CREATE TABLE IF NOT EXISTS ratings (
     movie_id INTEGER NOT NULL,
     rating INTEGER NOT NULL,
     timestamp INTEGER NOT NULL,
+    review TEXT NOT NULL DEFAULT '',
     PRIMARY KEY (user_id, movie_id)
 );
 
@@ -51,7 +52,47 @@ CREATE TABLE IF NOT EXISTS admin_audit_log (
     administrator TEXT NOT NULL,
     target TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS accounts (
+    account_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT UNIQUE NOT NULL,
+    email TEXT UNIQUE NOT NULL,
+    password_hash TEXT NOT NULL,
+    movielens_user_id INTEGER,
+    is_active INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS favorites (
+    account_id INTEGER NOT NULL,
+    movie_id INTEGER NOT NULL,
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (account_id, movie_id)
+);
+
+CREATE TABLE IF NOT EXISTS user_preferences (
+    account_id INTEGER PRIMARY KEY,
+    genres TEXT NOT NULL,
+    seed_movie_ids TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS user_profiles (
+    account_id INTEGER PRIMARY KEY,
+    top_genres TEXT NOT NULL,
+    year_range TEXT NOT NULL,
+    preferred_min_rating REAL NOT NULL,
+    updated_at TEXT NOT NULL
+);
 """
+
+
+def migrate_schema(conn: sqlite3.Connection) -> None:
+    """Apply additive column migrations to tables created by an older `_SCHEMA` version."""
+    rating_columns = {row["name"] for row in conn.execute("PRAGMA table_info(ratings)").fetchall()}
+    if "review" not in rating_columns:
+        conn.execute("ALTER TABLE ratings ADD COLUMN review TEXT NOT NULL DEFAULT ''")
+        conn.commit()
 
 
 def get_connection(db_path: Path | str = DB_PATH) -> sqlite3.Connection:
@@ -71,6 +112,7 @@ def init_db(
     """Create tables if missing and seed them from the raw dataset on first run."""
     conn = get_connection(db_path)
     conn.executescript(_SCHEMA)
+    migrate_schema(conn)
 
     movie_count = conn.execute("SELECT COUNT(*) FROM movies").fetchone()[0]
     if movie_count == 0 and movies_df is not None:
@@ -230,6 +272,52 @@ def log_admin_action(
     )
     if owns_conn:
         conn.commit()
+        conn.close()
+
+
+def get_user_ratings(user_id: int, db_path: Path | str = DB_PATH) -> pd.DataFrame:
+    """Return a user's ratings from the persisted `ratings` table (movie_id, rating, timestamp, review)."""
+    conn = get_connection(db_path)
+    try:
+        rows = conn.execute(
+            "SELECT movie_id, rating, timestamp, review FROM ratings WHERE user_id = ? ORDER BY timestamp DESC",
+            (int(user_id),),
+        ).fetchall()
+    finally:
+        conn.close()
+    return pd.DataFrame(
+        [dict(row) for row in rows], columns=["movie_id", "rating", "timestamp", "review"]
+    )
+
+
+def get_user_rating(user_id: int, movie_id: int, db_path: Path | str = DB_PATH) -> dict | None:
+    """Return a single rating (rating, review, timestamp) for `user_id`/`movie_id`, or None."""
+    conn = get_connection(db_path)
+    try:
+        row = conn.execute(
+            "SELECT rating, review, timestamp FROM ratings WHERE user_id = ? AND movie_id = ?",
+            (int(user_id), int(movie_id)),
+        ).fetchone()
+    finally:
+        conn.close()
+    return dict(row) if row is not None else None
+
+
+def upsert_rating(
+    user_id: int, movie_id: int, rating: int, review: str = "", db_path: Path | str = DB_PATH
+) -> None:
+    """Insert or update a single rating + review in the persisted `ratings` table."""
+    conn = get_connection(db_path)
+    try:
+        now = int(datetime.now(UTC).timestamp())
+        conn.execute(
+            "INSERT INTO ratings (user_id, movie_id, rating, timestamp, review) VALUES (?, ?, ?, ?, ?) "
+            "ON CONFLICT(user_id, movie_id) DO UPDATE SET rating = excluded.rating, "
+            "timestamp = excluded.timestamp, review = excluded.review",
+            (int(user_id), int(movie_id), int(rating), now, str(review)),
+        )
+        conn.commit()
+    finally:
         conn.close()
 
 

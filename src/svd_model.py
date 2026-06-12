@@ -114,3 +114,33 @@ class SVDRecommender:
             preds[i] = baseline + latent
 
         return clip_predictions(preds, *RATING_SCALE)
+
+    def predict_for_user(self, user_id: int, movie_ids: list[int]) -> pd.Series:
+        """Vectorized equivalent of calling `predict()` for each movie_id.
+
+        Computes the bias baseline per candidate (cheap dict lookups) and
+        adds the latent-factor contribution for all candidates at once via a
+        single matrix-vector product, instead of looping `predict()`.
+        """
+        if self._svd is None or self._user_factors is None or self._baseline is None:
+            raise RuntimeError("Call fit() before predict_for_user().")
+
+        baselines = np.array(
+            [self._baseline.predict(user_id, movie_id) for movie_id in movie_ids],
+            dtype=float,
+        )
+        result = pd.Series(baselines, index=movie_ids, dtype=float)
+
+        if user_id not in self._user_idx:
+            return result
+
+        valid = [m for m in movie_ids if m in self._movie_idx]
+        if not valid:
+            return result
+
+        user_pos = self._user_idx[user_id]
+        movie_positions = [self._movie_idx[m] for m in valid]
+        latent = self._user_factors[user_pos] @ self._svd.components_[:, movie_positions]
+        preds = result.loc[valid].to_numpy() + latent
+        result.loc[valid] = clip_predictions(preds, *RATING_SCALE)
+        return result

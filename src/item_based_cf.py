@@ -86,6 +86,53 @@ class ItemBasedCF:
         ]
         return np.array(preds, dtype=float)
 
+    def predict_for_user(self, user_id: int, movie_ids: list[int]) -> pd.Series:
+        """Vectorized equivalent of calling `predict()` for each movie_id.
+
+        Scores all candidate movies for one user in a single batch of numpy
+        operations instead of one pandas `.loc` lookup per movie, which is
+        the dominant cost when ranking ~1,600 candidates per request.
+        """
+        if self._matrix is None or self._sim is None or self._item_means is None:
+            raise RuntimeError("Call fit() before predict_for_user().")
+
+        result = pd.Series(self._global_mean, index=movie_ids, dtype=float)
+        known_means = self._item_means.index.intersection(movie_ids)
+        if len(known_means):
+            result.loc[known_means] = self._item_means.loc[known_means].fillna(self._global_mean)
+
+        if user_id not in self._matrix.index:
+            return result
+
+        user_row = self._matrix.loc[user_id]
+        rated_items = user_row.dropna().index
+        valid = [m for m in movie_ids if m in self._sim.index]
+        if not valid or len(rated_items) == 0:
+            return result
+
+        sim_sub = self._sim.loc[valid, rated_items].to_numpy()
+        sim_sub = np.where(sim_sub > 0, sim_sub, 0.0)
+
+        if sim_sub.shape[1] > self.k:
+            topk_idx = np.argpartition(-sim_sub, self.k - 1, axis=1)[:, : self.k]
+            mask = np.zeros_like(sim_sub, dtype=bool)
+            rows = np.arange(sim_sub.shape[0])[:, None]
+            mask[rows, topk_idx] = True
+            sim_sub = np.where(mask, sim_sub, 0.0)
+
+        rated_values = user_row.loc[rated_items].to_numpy()
+        rated_means = self._item_means.loc[rated_items].to_numpy()
+        centered_rated = rated_values - rated_means
+
+        num = sim_sub @ centered_rated
+        den = sim_sub.sum(axis=1)
+
+        item_means_valid = self._item_means.reindex(valid).fillna(self._global_mean).to_numpy()
+        ratio = np.divide(num, den, out=np.zeros_like(num), where=den > 0)
+        preds = np.where(den > 0, item_means_valid + ratio, item_means_valid)
+        result.loc[valid] = clip_predictions(preds, *RATING_SCALE)
+        return result
+
     def similar_items(self, movie_id: int, n: int = 10) -> pd.Series:
         """Return top-n most similar movies by item–item similarity (training fit required)."""
         if self._sim is None:

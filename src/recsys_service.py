@@ -74,6 +74,22 @@ def calibrated_score(
     return float(np.clip(score, 1.0, 4.99))
 
 
+def calibrated_score_batch(
+    raw_pred: np.ndarray,
+    avg_rating: np.ndarray,
+    user_mean: float,
+    confidence: np.ndarray,
+    rating_count: np.ndarray,
+    global_mean: float,
+) -> np.ndarray:
+    """Vectorized variant of `calibrated_score` for scoring many candidates at once."""
+    count_weight = np.minimum(1.0, np.log1p(np.maximum(rating_count, 0)) / np.log1p(250))
+    evidence = 0.58 * raw_pred + 0.27 * avg_rating + 0.15 * user_mean
+    reliability = 0.72 + 0.20 * confidence + 0.08 * count_weight
+    score = reliability * evidence + (1 - reliability) * global_mean
+    return np.clip(score, 1.0, 4.99)
+
+
 def recommendation_reason(algorithm: str, genres: str) -> str:
     name = algorithm.strip().lower()
     primary_genre = genres.split(",")[0].strip() if genres else "similar"
