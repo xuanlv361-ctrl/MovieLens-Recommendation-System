@@ -1,4 +1,4 @@
-"""Matrix factorization with sklearn TruncatedSVD (no scikit-surprise)."""
+"""Matrix factorization with sklearn TruncatedSVD on bias residuals."""
 
 from __future__ import annotations
 
@@ -7,6 +7,7 @@ import pandas as pd
 from scipy.sparse import csr_matrix
 from sklearn.decomposition import TruncatedSVD
 
+from .baselines import BiasBaseline
 from .config import RANDOM_STATE, RATING_SCALE, SVD_N_COMPONENTS, SVD_N_ITER
 from .metrics import clip_predictions
 from .preprocessing import global_mean
@@ -14,10 +15,11 @@ from .preprocessing import global_mean
 
 class SVDRecommender:
     """
-    Latent-factor model: R ≈ U @ V^T on mean-centered ratings.
+    Latent-factor model fitted to residuals around a regularized bias baseline.
 
-    Missing entries are omitted from the sparse matrix (stored as implicit zeros
-    in CSR). Predictions add back per-user means and clip to the rating scale.
+    Missing entries are omitted from the sparse residual matrix. The implicit
+    zeros in CSR therefore mean "no residual from the bias estimate", not
+    "missing rating equals zero".
     """
 
     def __init__(
@@ -25,20 +27,22 @@ class SVDRecommender:
         n_components: int = SVD_N_COMPONENTS,
         n_iter: int = SVD_N_ITER,
         random_state: int = RANDOM_STATE,
+        baseline_reg: float = 1.0,
     ):
         self.n_components = n_components
         self.n_iter = n_iter
         self.random_state = random_state
+        self.baseline_reg = baseline_reg
         self._svd: TruncatedSVD | None = None
         self._user_factors: np.ndarray | None = None
         self._user_idx: dict[int, int] = {}
         self._movie_idx: dict[int, int] = {}
-        self._user_means: pd.Series | None = None
         self._global_mean: float = 0.0
+        self._baseline: BiasBaseline | None = None
 
-    def fit(self, train: pd.DataFrame) -> "SVDRecommender":
+    def fit(self, train: pd.DataFrame) -> SVDRecommender:
         self._global_mean = global_mean(train)
-        self._user_means = train.groupby("user_id")["rating"].mean()
+        self._baseline = BiasBaseline(n_epochs=20, reg=self.baseline_reg).fit(train)
 
         user_ids = sorted(train["user_id"].unique())
         movie_ids = sorted(train["movie_id"].unique())
@@ -49,12 +53,12 @@ class SVDRecommender:
         cols: list[int] = []
         data: list[float] = []
         for row in train.itertuples(index=False):
-            u = int(row.user_id)
-            m = int(row.movie_id)
-            centered = float(row.rating) - float(self._user_means[u])
-            rows.append(self._user_idx[u])
-            cols.append(self._movie_idx[m])
-            data.append(centered)
+            user_id = int(row.user_id)
+            movie_id = int(row.movie_id)
+            residual = float(row.rating) - self._baseline.predict(user_id, movie_id)
+            rows.append(self._user_idx[user_id])
+            cols.append(self._movie_idx[movie_id])
+            data.append(residual)
 
         n_users = len(user_ids)
         n_movies = len(movie_ids)
@@ -77,20 +81,21 @@ class SVDRecommender:
         return self
 
     def predict(self, user_id: int, movie_id: int) -> float:
-        if self._svd is None or self._user_factors is None or self._user_means is None:
+        if self._svd is None or self._user_factors is None or self._baseline is None:
             raise RuntimeError("Call fit() before predict().")
 
+        baseline = self._baseline.predict(user_id, movie_id)
         if user_id not in self._user_idx or movie_id not in self._movie_idx:
-            return self._global_mean
+            return baseline
 
-        u = self._user_idx[user_id]
-        m = self._movie_idx[movie_id]
-        latent = float(self._user_factors[u] @ self._svd.components_[:, m])
-        pred = float(self._user_means[user_id]) + latent
+        user_pos = self._user_idx[user_id]
+        movie_pos = self._movie_idx[movie_id]
+        latent = float(self._user_factors[user_pos] @ self._svd.components_[:, movie_pos])
+        pred = baseline + latent
         return float(clip_predictions(np.array([pred]), *RATING_SCALE)[0])
 
     def predict_batch(self, test: pd.DataFrame) -> np.ndarray:
-        if self._svd is None or self._user_factors is None or self._user_means is None:
+        if self._svd is None or self._user_factors is None or self._baseline is None:
             raise RuntimeError("Call fit() before predict_batch().")
 
         preds = np.empty(len(test), dtype=float)
@@ -99,12 +104,13 @@ class SVDRecommender:
         for i, row in enumerate(test.itertuples(index=False)):
             user_id = int(row.user_id)
             movie_id = int(row.movie_id)
+            baseline = self._baseline.predict(user_id, movie_id)
             if user_id not in self._user_idx or movie_id not in self._movie_idx:
-                preds[i] = self._global_mean
+                preds[i] = baseline
                 continue
-            u = self._user_idx[user_id]
-            m = self._movie_idx[movie_id]
-            latent = float(self._user_factors[u] @ components[:, m])
-            preds[i] = float(self._user_means[user_id]) + latent
+            user_pos = self._user_idx[user_id]
+            movie_pos = self._movie_idx[movie_id]
+            latent = float(self._user_factors[user_pos] @ components[:, movie_pos])
+            preds[i] = baseline + latent
 
         return clip_predictions(preds, *RATING_SCALE)

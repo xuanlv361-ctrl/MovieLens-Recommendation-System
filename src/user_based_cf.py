@@ -29,7 +29,7 @@ class UserBasedCF:
         self._sim: pd.DataFrame | None = None
         self._global_mean: float = 0.0
 
-    def fit(self, train: pd.DataFrame) -> "UserBasedCF":
+    def fit(self, train: pd.DataFrame) -> UserBasedCF:
         self._global_mean = global_mean(train)
         self._matrix = build_user_item_matrix(train, fill_value=np.nan)
         self._centered, self._user_means = mean_center_by_user(self._matrix)

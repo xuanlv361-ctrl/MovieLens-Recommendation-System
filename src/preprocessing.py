@@ -23,6 +23,126 @@ def split_ratings(
     return train.reset_index(drop=True), test.reset_index(drop=True)
 
 
+def time_based_split(
+    ratings: pd.DataFrame,
+    test_size: float = TEST_SIZE,
+    timestamp_col: str = "timestamp",
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Chronological hold-out split to reduce future-to-past leakage."""
+    if timestamp_col not in ratings.columns:
+        raise ValueError(f"Missing timestamp column: {timestamp_col}")
+    if not 0 < test_size < 1:
+        raise ValueError("test_size must be between 0 and 1.")
+
+    ordered = ratings.sort_values(timestamp_col).reset_index(drop=True)
+    split_at = int(len(ordered) * (1 - test_size))
+    train = ordered.iloc[:split_at].copy()
+    test = ordered.iloc[split_at:].copy()
+    return train.reset_index(drop=True), test.reset_index(drop=True)
+
+
+def user_temporal_split(
+    ratings: pd.DataFrame,
+    test_size: float = TEST_SIZE,
+    timestamp_col: str = "timestamp",
+    user_col: str = "user_id",
+    min_train_ratings: int = 1,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """
+    Split each user's ratings chronologically into train and test rows.
+
+    This preserves each user's past-to-future ordering while ensuring every test
+    user has training history, which is important for evaluating collaborative
+    filtering without turning the main experiment into a pure cold-start task.
+    """
+    if timestamp_col not in ratings.columns:
+        raise ValueError(f"Missing timestamp column: {timestamp_col}")
+    if user_col not in ratings.columns:
+        raise ValueError(f"Missing user column: {user_col}")
+    if not 0 < test_size < 1:
+        raise ValueError("test_size must be between 0 and 1.")
+    if min_train_ratings < 1:
+        raise ValueError("min_train_ratings must be at least 1.")
+
+    train_parts = []
+    test_parts = []
+    ordered = ratings.sort_values([user_col, timestamp_col]).reset_index(drop=True)
+
+    for _, user_rows in ordered.groupby(user_col, sort=False):
+        n_rows = len(user_rows)
+        n_test = max(1, int(round(n_rows * test_size))) if n_rows > min_train_ratings else 0
+        n_test = min(n_test, max(0, n_rows - min_train_ratings))
+
+        if n_test == 0:
+            train_parts.append(user_rows)
+            continue
+
+        train_parts.append(user_rows.iloc[:-n_test])
+        test_parts.append(user_rows.iloc[-n_test:])
+
+    train = pd.concat(train_parts, ignore_index=True)
+    test = pd.concat(test_parts, ignore_index=True) if test_parts else ratings.iloc[0:0].copy()
+    return train.reset_index(drop=True), test.reset_index(drop=True)
+
+
+def user_temporal_train_val_test_split(
+    ratings: pd.DataFrame,
+    val_size: float = TEST_SIZE,
+    test_size: float = TEST_SIZE,
+    timestamp_col: str = "timestamp",
+    user_col: str = "user_id",
+    min_train_ratings: int = 1,
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    """
+    Split each user's ratings chronologically into train, validation, and test rows.
+
+    For each user (sorted by timestamp), the most recent ratings are carved off
+    for the test set, then the next most recent for the validation set, leaving
+    the remainder for training. Hyperparameter tuning should use only the
+    validation split; the test split must remain untouched until the final
+    evaluation.
+    """
+    if timestamp_col not in ratings.columns:
+        raise ValueError(f"Missing timestamp column: {timestamp_col}")
+    if user_col not in ratings.columns:
+        raise ValueError(f"Missing user column: {user_col}")
+    if not 0 < val_size < 1:
+        raise ValueError("val_size must be between 0 and 1.")
+    if not 0 < test_size < 1:
+        raise ValueError("test_size must be between 0 and 1.")
+    if val_size + test_size >= 1:
+        raise ValueError("val_size + test_size must be less than 1.")
+    if min_train_ratings < 1:
+        raise ValueError("min_train_ratings must be at least 1.")
+
+    train_parts = []
+    val_parts = []
+    test_parts = []
+    ordered = ratings.sort_values([user_col, timestamp_col]).reset_index(drop=True)
+
+    for _, user_rows in ordered.groupby(user_col, sort=False):
+        n_rows = len(user_rows)
+        n_test = max(1, int(round(n_rows * test_size))) if n_rows > min_train_ratings else 0
+        n_test = min(n_test, max(0, n_rows - min_train_ratings))
+
+        remaining = n_rows - n_test
+        n_val = max(1, int(round(n_rows * val_size))) if remaining > min_train_ratings else 0
+        n_val = min(n_val, max(0, remaining - min_train_ratings))
+
+        n_train = n_rows - n_test - n_val
+
+        train_parts.append(user_rows.iloc[:n_train])
+        if n_val > 0:
+            val_parts.append(user_rows.iloc[n_train : n_train + n_val])
+        if n_test > 0:
+            test_parts.append(user_rows.iloc[n_train + n_val :])
+
+    train = pd.concat(train_parts, ignore_index=True)
+    val = pd.concat(val_parts, ignore_index=True) if val_parts else ratings.iloc[0:0].copy()
+    test = pd.concat(test_parts, ignore_index=True) if test_parts else ratings.iloc[0:0].copy()
+    return train.reset_index(drop=True), val.reset_index(drop=True), test.reset_index(drop=True)
+
+
 def global_mean(train: pd.DataFrame) -> float:
     return float(train["rating"].mean())
 

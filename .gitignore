@@ -23,5 +23,8 @@ Thumbs.db
 .idea/
 .vscode/
 
+# Secrets / local configuration
+.env
+
 # Optional: uncomment to ignore generated figures
 # figures/*.png

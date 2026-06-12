@@ -12,3 +12,7 @@ dependencies:
   - jupyter>=1.0,<2
   - jupyterlab>=4.0,<5
   - streamlit>=1.28,<2
+  - nbconvert>=7.0,<8
+  - pip
+  - pip:
+      - python-dotenv>=1.0,<2
