@@ -24,39 +24,7 @@
 
 ## 系统架构 / Architecture
 
-```mermaid
-flowchart TB
-    subgraph data["数据层 Data"]
-        RAW["MovieLens 100K\n(u.data / u.item / u.genre)"]
-        DB["SQLite\ndata/processed/app.db"]
-    end
-
-    subgraph core["核心算法层 src/"]
-        PREP["data_cleaning.py\npreprocessing.py\ndata_loader.py"]
-        ALGOS["user_based_cf.py / item_based_cf.py\nsvd_model.py / hybrid_model.py\nbaselines.py / neural_cf.py"]
-        METRICS["metrics.py\nanalysis.py / visualization.py"]
-        SERVICE["recsys_service.py\n(共享业务逻辑层)"]
-        I18N["i18n.py\nposters.py / auth.py / config.py"]
-    end
-
-    subgraph apps["应用层 Apps"]
-        WEB["app.py\nStreamlit Web 演示"]
-        DESKTOP["qt_app.py\nPyQt5 桌面演示"]
-        NB["notebooks/\n01_movielens_recommendation.ipynb\n(完整实验与评估)"]
-    end
-
-    RAW --> PREP --> ALGOS --> METRICS
-    PREP --> SERVICE
-    ALGOS --> SERVICE
-    DB <--> SERVICE
-    SERVICE --> WEB
-    SERVICE --> DESKTOP
-    I18N --> WEB
-    I18N --> DESKTOP
-    PREP --> NB
-    ALGOS --> NB
-    METRICS --> NB
-```
+![System Architecture](figures/system_architecture.png)
 
 - **数据层**：原始 MovieLens 100K 文件只读；管理员对电影库的增删改、用户/评分快照及操作审计写入本地 SQLite 数据库 `data/processed/app.db`。
 - **核心算法层**：`src/` 包含数据清洗、特征工程、各推荐算法实现、评估指标与图表生成，被 notebook 与两个演示应用共同复用。
@@ -67,35 +35,7 @@ flowchart TB
 
 `src/db.py` 中定义的 SQLite 持久化层（`data/processed/app.db`）：
 
-```mermaid
-erDiagram
-    MOVIES {
-        int movie_id PK
-        text title
-        text data "JSON: 完整电影元数据（类型/年份/IMDb链接等）"
-    }
-    USERS {
-        int user_id PK
-        int n_ratings
-        real avg_rating
-    }
-    RATINGS {
-        int user_id PK, FK
-        int movie_id PK, FK
-        int rating
-        int timestamp
-    }
-    ADMIN_AUDIT_LOG {
-        int id PK
-        text ts
-        text operation
-        text administrator
-        text target
-    }
-
-    USERS ||--o{ RATINGS : "评分"
-    MOVIES ||--o{ RATINGS : "被评分"
-```
+![Database ER Diagram](figures/database_er.png)
 
 - `movies`：电影库主数据表，管理员的"添加电影/编辑电影/删除电影"操作直接作用于此表（首次启动时由 `u.item` 自动播种）。
 - `users` / `ratings`：用户与评分的快照表（首次启动由 `u.data` 自动播种），供管理员后台统计展示；大规模分析与建模仍直接读取 `src.data_loader` 提供的原始 CSV，以保证性能。
