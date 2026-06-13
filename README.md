@@ -24,7 +24,7 @@
 
 ## 系统架构 / Architecture
 
-![System Architecture](figures/system_architecture.png)
+![System Architecture](figures/电影推荐系统整体架构图.jpg)
 
 - **数据层**：原始 MovieLens 100K 文件只读；管理员对电影库的增删改、用户/评分快照及操作审计写入本地 SQLite 数据库 `data/processed/app.db`。
 - **核心算法层**：`src/` 包含数据清洗、特征工程、各推荐算法实现、评估指标与图表生成，被 notebook 与两个演示应用共同复用。
@@ -35,10 +35,11 @@
 
 `src/db.py` 中定义的 SQLite 持久化层（`data/processed/app.db`）：
 
-![Database ER Diagram](figures/database_er.png)
+![Database ER Diagram](figures/ER图.jpg)
 
 - `movies`：电影库主数据表，管理员的"添加电影/编辑电影/删除电影"操作直接作用于此表（首次启动时由 `u.item` 自动播种）。
-- `users` / `ratings`：用户与评分的快照表（首次启动由 `u.data` 自动播种），供管理员后台统计展示；大规模分析与建模仍直接读取 `src.data_loader` 提供的原始 CSV，以保证性能。
+- `users` / `ratings`：用户与评分的快照表（首次启动由 `u.data` 自动播种，`ratings` 含 `review` 字段），供管理员后台统计展示；大规模分析与建模仍直接读取 `src.data_loader` 提供的原始 CSV，以保证性能。
+- `accounts` / `favorites` / `user_preferences` / `user_profiles`：FilmTrace 用户账号系统（`src/accounts.py`）的注册账号、收藏、偏好类型与观影画像数据，`accounts.movielens_user_id` 可选关联到 `users`，用于复用既有推荐模型生成"为你推荐"结果。
 - `admin_audit_log`：记录每一次管理员的增删改操作（时间、操作类型、管理员、目标对象），用于后台"操作日志"展示。
 
 ## 项目结构 / Project Structure
