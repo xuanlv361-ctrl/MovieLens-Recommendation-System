@@ -22,6 +22,7 @@ NON_GENRE_COLUMNS = {
     "release_year",
     "video_release_date",
     "imdb_url",
+    "poster_filename",
 }
 
 # Algorithm display names used across both front ends, normalized to a

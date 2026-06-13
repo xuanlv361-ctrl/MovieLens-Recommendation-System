@@ -141,6 +141,7 @@ def movie_catalog(
                 "Average Rating": round(float(avg_ratings.get(movie_id, np.nan)), 2),
                 "Ratings": int(rating_counts.get(movie_id, 0)),
                 "Release Year": movie_row.get("release_year", ""),
+                "Poster Filename": str(movie_row.get("poster_filename", "") or ""),
             }
         )
     return pd.DataFrame(rows)
@@ -669,6 +670,35 @@ def user_genre_preferences(
     )
 
 
+def infer_preferred_genres_zh(ratings: pd.DataFrame, movies: pd.DataFrame, user_id: int, top_n: int = 5) -> str:
+    """根据 MovieLens 评分历史推断用户偏好类型，返回“、”分隔的中文类型字符串。
+
+    优先统计该用户评分 >= 4 的电影所属类型出现频次（次数越多、平均分越高越靠前）；
+    若高分样本过少（少于 3 条），改用该用户的全部评分记录。若用户没有任何评分
+    记录，返回空字符串，由调用方回退显示“偏好数据不足”。
+    """
+    genres = display_genre_columns(movies)
+    if not genres:
+        return ""
+    history = ratings.loc[ratings["user_id"] == user_id].merge(
+        movies[["movie_id", *genres]], on="movie_id", how="left"
+    )
+    if history.empty:
+        return ""
+    liked = history[history["rating"] >= 4]
+    pool = liked if len(liked) >= 3 else history
+    counts: list[tuple[str, int, float]] = []
+    for genre in genres:
+        rated = pool.loc[pool[genre] == 1]
+        if rated.empty:
+            continue
+        counts.append((genre, int(len(rated)), float(rated["rating"].mean())))
+    if not counts:
+        return ""
+    counts.sort(key=lambda item: (item[1], item[2]), reverse=True)
+    return "、".join(GENRE_ZH.get(genre, genre) for genre, _, _ in counts[:top_n])
+
+
 def inject_theme() -> None:
     render_html_block(
         """
@@ -1025,7 +1055,7 @@ def inject_theme() -> None:
         .hot-movie-card {
             flex: 1 1 18%;
             min-width: 160px;
-            height: 340px;
+            height: 360px;
             background: rgba(18, 28, 38, 0.92);
             border-radius: 16px;
             border: 1px solid rgba(255, 255, 255, 0.10);
@@ -1054,12 +1084,16 @@ def inject_theme() -> None:
             margin-bottom: 0.5rem;
             background: var(--poster-bg, linear-gradient(135deg, #35485a, #101418));
             border: 1px solid rgba(221, 238, 255, 0.12);
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
 
         .hot-movie-poster-wrap img {
             width: 100%;
             height: 100%;
-            object-fit: cover;
+            object-fit: contain;
+            object-position: center;
             display: block;
         }
 
@@ -1075,10 +1109,402 @@ def inject_theme() -> None:
             -webkit-box-orient: vertical;
         }
 
+        .hot-movie-genre {
+            font-size: 0.72rem;
+            color: var(--cloud);
+            opacity: 0.85;
+            margin-top: 0.15rem;
+            overflow: hidden;
+            white-space: nowrap;
+            text-overflow: ellipsis;
+        }
+
         .hot-movie-meta {
             margin-top: auto;
             font-size: 0.78rem;
             color: var(--cloud);
+        }
+
+        .movie-detail-card {
+            display: flex;
+            gap: 1.2rem;
+            background: rgba(18, 28, 38, 0.92);
+            border: 1px solid rgba(255, 255, 255, 0.10);
+            border-radius: 18px;
+            padding: 1.2rem;
+            box-shadow: rgba(0, 0, 0, 0.35) 0 18px 50px;
+            margin: 0.6rem 0 1.4rem;
+        }
+
+        .movie-detail-poster {
+            flex: 0 0 200px;
+            height: 290px;
+            border-radius: 12px;
+            overflow: hidden;
+            background: var(--poster-bg, linear-gradient(135deg, #35485a, #101418));
+            border: 1px solid rgba(221, 238, 255, 0.12);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .movie-detail-poster img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            object-position: center;
+            display: block;
+        }
+
+        .admin-movie-card {
+            background: rgba(15, 23, 42, 0.78);
+            border: 1px solid rgba(148, 163, 184, 0.16);
+            border-radius: 20px;
+            padding: 16px;
+            box-shadow: 0 18px 44px rgba(0, 0, 0, 0.28);
+            height: 540px;
+            display: flex;
+            flex-direction: column;
+            transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+        }
+
+        .admin-movie-card:hover {
+            transform: translateY(-4px);
+            border-color: rgba(0, 224, 84, 0.5);
+        }
+
+        .admin-movie-poster {
+            width: 100%;
+            height: 280px;
+            border-radius: 14px;
+            overflow: hidden;
+            background: rgba(5, 12, 20, 0.9);
+            border: 1px solid rgba(221, 238, 255, 0.12);
+            margin-bottom: 0.7rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex: 0 0 280px;
+        }
+
+        .admin-movie-poster img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            object-position: center;
+            display: block;
+        }
+
+        .admin-movie-card-title {
+            color: var(--white);
+            font-weight: 800;
+            font-size: 0.95rem;
+            line-height: 1.3;
+            height: 2.6em;
+            overflow: hidden;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+        }
+
+        .admin-movie-card-genres {
+            color: rgba(221, 238, 255, 0.75);
+            font-size: 0.72rem;
+            margin-top: 0.3rem;
+            line-height: 1.4;
+            height: 2.4em;
+            overflow: hidden;
+        }
+
+        .admin-movie-card-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 0.4rem;
+            font-size: 0.8rem;
+        }
+
+        .admin-movie-card-meta .rating { color: var(--gold); font-weight: 800; }
+        .admin-movie-card-meta .year { color: var(--cloud); }
+
+        .admin-movie-card-extra {
+            color: var(--cloud);
+            font-size: 0.75rem;
+            margin-top: 0.3rem;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .movie-detail-info {
+            flex: 1 1 auto;
+            display: flex;
+            flex-direction: column;
+            gap: 0.35rem;
+            min-width: 0;
+        }
+
+        .movie-detail-info h3 {
+            color: var(--white);
+            font-size: 1.25rem;
+            font-weight: 900;
+            margin: 0 0 0.1rem;
+        }
+
+        .movie-detail-info .subtitle {
+            color: var(--cloud);
+            font-size: 0.85rem;
+            margin-bottom: 0.4rem;
+        }
+
+        .movie-detail-row {
+            display: flex;
+            gap: 0.5rem;
+            font-size: 0.86rem;
+            color: #dbeafe;
+        }
+
+        .movie-detail-row .field-label {
+            color: var(--cloud);
+            min-width: 88px;
+            font-weight: 700;
+        }
+
+        .movie-detail-row .field-value {
+            word-break: break-all;
+        }
+
+        /* User profile / persona dashboard ---------------------------- */
+
+        .persona-hero-card {
+            position: relative;
+            background: linear-gradient(135deg, rgba(0, 230, 118, 0.14), rgba(18, 28, 38, 0.94));
+            border: 1px solid rgba(0, 230, 118, 0.22);
+            border-radius: 24px;
+            padding: 2rem 2.2rem;
+            box-shadow: rgba(0, 230, 118, 0.10) 0 0 50px, rgba(0, 0, 0, 0.35) 0 18px 50px;
+            margin: 0.6rem 0 1.6rem;
+            overflow: hidden;
+        }
+
+        .persona-hero-glow {
+            position: absolute;
+            top: -60%;
+            right: -12%;
+            width: 320px;
+            height: 320px;
+            background: radial-gradient(circle, rgba(0, 230, 118, 0.28), transparent 70%);
+            border-radius: 50%;
+            pointer-events: none;
+        }
+
+        .persona-hero-title {
+            position: relative;
+            color: var(--white);
+            font-size: 1.9rem;
+            font-weight: 900;
+            letter-spacing: -0.01em;
+        }
+
+        .persona-hero-subtitle {
+            position: relative;
+            color: var(--cloud);
+            font-size: 0.92rem;
+            margin: 0.5rem 0 1.4rem;
+            line-height: 1.6;
+            max-width: 720px;
+        }
+
+        .persona-hero-grid {
+            position: relative;
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 1rem 1.6rem;
+        }
+
+        .persona-hero-item {
+            border-left: 3px solid rgba(0, 230, 118, 0.45);
+            padding-left: 0.75rem;
+        }
+
+        .persona-hero-label {
+            color: var(--cloud);
+            font-size: 0.76rem;
+            font-weight: 700;
+            letter-spacing: 0.03em;
+        }
+
+        .persona-hero-value {
+            color: var(--white);
+            font-size: 1.1rem;
+            font-weight: 800;
+            margin-top: 0.2rem;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        @media (max-width: 1100px) {
+            .persona-hero-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        }
+
+        .persona-stat-grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 0.9rem;
+            margin: 0.6rem 0 1.6rem;
+        }
+
+        .persona-stat-card {
+            background: rgba(18, 28, 38, 0.92);
+            border: 1px solid rgba(255, 255, 255, 0.10);
+            border-radius: 18px;
+            padding: 1.1rem 1.2rem;
+            box-shadow: rgba(0, 0, 0, 0.30) 0 14px 36px;
+            min-height: 104px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .persona-stat-card .icon {
+            font-size: 1.3rem;
+            margin-bottom: 0.35rem;
+            opacity: 0.9;
+        }
+
+        .persona-stat-card .value {
+            color: var(--white);
+            font-size: 1.25rem;
+            font-weight: 900;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .persona-stat-card .value.accent { color: #00e676; }
+
+        .persona-stat-card .label {
+            color: var(--cloud);
+            font-size: 0.78rem;
+            margin-top: 0.3rem;
+            font-weight: 600;
+        }
+
+        @media (max-width: 1100px) {
+            .persona-stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        }
+
+        .taste-tag-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.7rem;
+            margin: 0.6rem 0 1.6rem;
+        }
+
+        .taste-tag {
+            display: inline-flex;
+            align-items: center;
+            padding: 0.5rem 1.2rem;
+            border-radius: 999px;
+            border: 1px solid rgba(0, 230, 118, 0.5);
+            background: rgba(0, 230, 118, 0.08);
+            color: #00e676;
+            font-weight: 800;
+            font-size: 0.86rem;
+            letter-spacing: 0.02em;
+        }
+
+        .explain-card {
+            background: rgba(18, 28, 38, 0.92);
+            border: 1px solid rgba(64, 188, 244, 0.22);
+            border-radius: 20px;
+            padding: 1.3rem 1.5rem;
+            box-shadow: rgba(0, 0, 0, 0.30) 0 14px 36px;
+            margin: 0.6rem 0 1.6rem;
+        }
+
+        .explain-card .explain-title {
+            color: var(--white);
+            font-size: 1.05rem;
+            font-weight: 900;
+            margin-bottom: 0.5rem;
+        }
+
+        .explain-card .explain-body {
+            color: #cbd5e1;
+            font-size: 0.92rem;
+            line-height: 1.85;
+        }
+
+        .explain-card .explain-body .accent { color: #00e676; font-weight: 800; }
+
+        .rep-movie-grid {
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+            margin: 0.6rem 0 1.6rem;
+        }
+
+        .rep-movie-card {
+            flex: 1 1 18%;
+            min-width: 170px;
+            background: rgba(18, 28, 38, 0.92);
+            border: 1px solid rgba(255, 255, 255, 0.10);
+            border-radius: 16px;
+            padding: 0.75rem;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .rep-movie-poster {
+            height: 220px;
+            flex: 0 0 220px;
+            border-radius: 12px;
+            overflow: hidden;
+            margin-bottom: 0.5rem;
+            background: var(--poster-bg, linear-gradient(135deg, #35485a, #101418));
+            border: 1px solid rgba(221, 238, 255, 0.12);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .rep-movie-poster img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            object-position: center;
+            display: block;
+        }
+
+        .rep-movie-title {
+            height: 2.6em;
+            line-height: 1.3;
+            font-size: 0.85rem;
+            font-weight: 800;
+            color: var(--white);
+            overflow: hidden;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+        }
+
+        .rep-movie-genre {
+            font-size: 0.72rem;
+            color: var(--cloud);
+            opacity: 0.85;
+            margin-top: 0.15rem;
+            overflow: hidden;
+            white-space: nowrap;
+            text-overflow: ellipsis;
+        }
+
+        .rep-movie-rating {
+            margin-top: auto;
+            padding-top: 0.4rem;
+            color: #ffd166;
+            font-weight: 800;
+            font-size: 0.85rem;
         }
 
         .hot-movie-meta .rating { color: #ffd166; font-weight: 800; }
@@ -1373,6 +1799,85 @@ def inject_theme() -> None:
             overflow: hidden;
         }
 
+        /* "相似电影" 推荐卡片：海报 + 标题 + 元信息 + 推荐理由 */
+        .reco-movie-card {
+            background: rgba(15, 23, 42, 0.78);
+            border: 1px solid rgba(148, 163, 184, 0.16);
+            border-radius: 20px;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 18px 44px rgba(0, 0, 0, 0.28);
+            transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+            margin-bottom: 1rem;
+        }
+
+        .reco-movie-card:hover {
+            transform: translateY(-4px);
+            border-color: rgba(0, 224, 84, 0.35);
+        }
+
+        .reco-movie-poster {
+            width: 100%;
+            height: 240px;
+            border-radius: 14px;
+            overflow: hidden;
+            background: rgba(5, 12, 20, 0.9);
+            border: 1px solid rgba(221, 238, 255, 0.12);
+            margin-bottom: 0.7rem;
+            display: flex;
+        }
+
+        .reco-movie-poster img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            object-position: center;
+            display: block;
+        }
+
+        .reco-movie-title {
+            color: var(--white);
+            font-weight: 800;
+            font-size: 0.95rem;
+            line-height: 1.3;
+            height: 2.6em;
+            overflow: hidden;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+        }
+
+        .reco-movie-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 0.3rem;
+            font-size: 0.8rem;
+        }
+
+        .reco-movie-meta .rating { color: var(--gold); font-weight: 800; }
+        .reco-movie-meta .year { color: var(--cloud); }
+
+        .reco-movie-genres {
+            color: rgba(221, 238, 255, 0.75);
+            font-size: 0.72rem;
+            margin-top: 0.25rem;
+            line-height: 1.4;
+            height: 2em;
+            overflow: hidden;
+        }
+
+        .reco-movie-reason {
+            color: var(--vivid);
+            font-size: 0.74rem;
+            font-weight: 700;
+            margin-top: 0.5rem;
+            padding-top: 0.5rem;
+            border-top: 1px solid rgba(221, 238, 255, 0.1);
+            line-height: 1.4;
+        }
+
         /* "我的评分" cards: poster + score + review text */
         .rating-grid-card {
             background: rgba(32, 40, 48, 0.45);
@@ -1439,6 +1944,18 @@ def inject_theme() -> None:
 
         .rating-grid-meta .rating { color: var(--gold); font-weight: 800; }
         .rating-grid-date { color: var(--cloud); font-size: 0.72rem; }
+
+        .rating-grid-genres {
+            color: rgba(221, 238, 255, 0.75);
+            font-size: 0.72rem;
+            margin-top: 0.25rem;
+            line-height: 1.4;
+            height: 2.4em;
+            overflow: hidden;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+        }
 
         .rating-grid-review {
             color: rgba(221, 238, 255, 0.85);
@@ -1514,56 +2031,58 @@ def inject_theme() -> None:
         .landing-hero-content {
             position: relative;
             z-index: 2;
-            width: min(620px, 42vw);
-            padding-left: 8vw;
+            width: min(620px, 40vw);
+            padding-left: 7vw;
             padding-top: 12vh;
         }
 
         .landing-hero-content .landing-brand {
             font-family: Georgia, "Noto Serif SC", serif;
-            font-size: 4.6rem;
+            font-size: clamp(58px, 4.4vw, 78px);
             font-weight: 900;
-            line-height: 1.05;
-            margin: 0 0 0.4rem;
-            letter-spacing: -0.02em;
+            line-height: 1;
+            margin: 0 0 18px;
+            letter-spacing: -1.2px;
         }
 
         .landing-hero-content .landing-brand .brand-film { color: var(--white); }
         .landing-hero-content .landing-brand .brand-trace { color: var(--vivid); }
 
         .landing-hero-content .landing-subtitle {
-            font-size: 1.85rem;
+            font-size: clamp(24px, 1.9vw, 32px);
             font-weight: 800;
-            margin-top: 1.1rem;
-            margin-bottom: 1rem;
-            line-height: 1.25;
+            margin-top: 0;
+            margin-bottom: 20px;
+            line-height: 1.2;
             color: var(--white);
         }
 
         .landing-hero-content .landing-description {
-            color: rgba(225, 238, 255, 0.9);
-            font-size: 1.05rem;
-            line-height: 1.85;
-            margin-bottom: 0;
+            color: rgba(220, 235, 245, 0.86);
+            font-size: clamp(14px, 0.95vw, 17px);
+            line-height: 1.75;
+            max-width: 540px;
+            margin-bottom: 28px;
             text-shadow: 0 2px 10px rgba(0, 0, 0, 0.7);
         }
 
         .landing-stats-row {
             display: flex;
             gap: 16px;
-            margin-top: 30px;
-            margin-bottom: 0;
+            margin-top: 26px;
+            margin-bottom: 22px;
             flex-wrap: wrap;
         }
 
         .landing-stat {
-            min-width: 130px;
+            min-width: 128px;
             padding: 18px 20px;
             border-radius: 16px;
-            background: rgba(8, 18, 32, 0.68);
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
-            border: 1px solid rgba(255, 255, 255, 0.10);
+            background: rgba(8, 18, 32, 0.72);
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            box-shadow: 0 18px 44px rgba(0, 0, 0, 0.28);
             display: flex;
             flex-direction: column;
             justify-content: center;
@@ -1573,21 +2092,23 @@ def inject_theme() -> None:
 
         .landing-stat .value {
             color: var(--vivid);
-            font-size: 1.5rem;
+            font-size: clamp(24px, 1.8vw, 30px);
             font-weight: 900;
-            line-height: 1.3;
+            line-height: 1;
         }
 
         .landing-stat .label {
-            color: rgba(255, 255, 255, 0.85);
-            font-size: 0.85rem;
-            margin-top: 0.3rem;
+            color: rgba(230, 240, 250, 0.86);
+            font-size: 13px;
+            font-weight: 700;
+            margin-top: 7px;
         }
 
         .landing-badge-row {
             display: flex;
-            gap: 0.7rem;
+            gap: 13px;
             margin-top: 18px;
+            margin-bottom: 28px;
             flex-wrap: wrap;
         }
 
@@ -1596,16 +2117,19 @@ def inject_theme() -> None:
             border: 1px solid rgba(0, 224, 84, 0.55);
             color: var(--vivid);
             border-radius: 999px;
-            padding: 0.5rem 1.25rem;
-            font-size: 0.88rem;
+            padding: 9px 20px;
+            font-size: 13px;
             font-weight: 800;
             letter-spacing: 0.03em;
         }
 
         .landing-hero-actions {
             display: flex;
+            flex-direction: row;
             gap: 20px;
-            margin-top: 34px;
+            align-items: center;
+            justify-content: flex-start;
+            margin-top: 28px;
             flex-wrap: wrap;
         }
 
@@ -1613,15 +2137,15 @@ def inject_theme() -> None:
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            min-width: 230px;
-            height: 58px;
-            border-radius: 18px;
+            width: 205px;
+            height: 52px;
+            border-radius: 15px;
             background: linear-gradient(135deg, #00c853, #00e676);
             color: #000000 !important;
             font-weight: 900;
-            font-size: 1rem;
+            font-size: 15px;
             text-decoration: none !important;
-            box-shadow: rgba(0, 230, 118, 0.32) 0 18px 42px;
+            box-shadow: rgba(0, 230, 118, 0.34) 0 18px 42px;
             transition: transform 0.22s ease, box-shadow 0.22s ease;
         }
 
@@ -1629,6 +2153,17 @@ def inject_theme() -> None:
             transform: translateY(-2px);
             box-shadow: rgba(0, 230, 118, 0.42) 0 24px 54px;
             color: #000000 !important;
+        }
+
+        @media (max-width: 900px) {
+            .landing-hero-actions {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .landing-hero-actions .landing-hero-btn {
+                width: 100%;
+            }
         }
 
         .onboarding-genre-intro {
@@ -2070,9 +2605,10 @@ def inject_theme() -> None:
 
         [data-testid="stMetric"] {
             background: rgba(32, 40, 48, 0.82);
-            border: 1px solid rgba(221, 238, 255, 0.08);
-            border-radius: 8px;
+            border: 1px solid rgba(0, 230, 118, 0.16);
+            border-radius: 12px;
             padding: 1rem;
+            box-shadow: rgba(0, 230, 118, 0.08) 0 0 18px;
         }
 
         [data-testid="stMetricValue"] {
@@ -2573,6 +3109,7 @@ def star_text(avg_rating: float) -> str:
     return f"{filled}/5"
 
 
+
 @st.cache_data(show_spinner=False)
 def poster_data_uri(path_str: str) -> str:
     """Base64-encode a local poster image for inline embedding in raw HTML cards."""
@@ -2590,6 +3127,7 @@ def library_poster_html(
     genres_zh: str = "",
     year: object = None,
     css_class: str = "movie-grid-poster",
+    poster_filename: str = "",
 ) -> str:
     """Return an HTML snippet for a movie poster: local image, TMDb image, or gradient fallback.
 
@@ -2597,6 +3135,8 @@ def library_poster_html(
     single raw-HTML block (so the hover animation covers the whole card).
     `css_class` selects the wrapper class (e.g. `movie-grid-poster` or
     `hot-movie-poster-wrap`), which controls the poster's fixed size.
+    `poster_filename`, if set (e.g. via an admin poster override), takes
+    priority over the automatic local-poster lookup.
     """
     use_poster_stage = css_class == "movie-grid-poster"
 
@@ -2610,6 +3150,12 @@ def library_poster_html(
                 "</div>"
             )
         return f'<div class="{css_class}"><img src="{src}" alt="{alt}"></div>'
+
+    if poster_filename:
+        override_path = LOCAL_POSTER_DIR / poster_filename
+        if override_path.is_file():
+            uri = poster_data_uri(str(override_path))
+            return poster_markup(uri)
 
     local_path = local_poster_path(title, title_zh)
     if local_path is not None:
@@ -2691,11 +3237,11 @@ def render_recommendation_cards(
                         show_movie_intro(movie_detail(movie_id, recs, movies, ratings))
 
 
-def render_hot_movies_top5(catalog: pd.DataFrame, top_n: int = 5) -> None:
-    """Admin home: 热门电影 Top N as a row of equal-size `.hot-movie-card` cards."""
-    rows = popular_movies(catalog, "Weighted Score", top_n).reset_index(drop=True)
+def render_movie_card_grid(rows: pd.DataFrame, empty_message: str = "暂无数据。") -> None:
+    """Render a catalog-shaped DataFrame as a row of `.hot-movie-card` cards with "Top N" badges."""
+    rows = rows.reset_index(drop=True)
     if rows.empty:
-        st.info("暂无数据。")
+        st.info(empty_message)
         return
 
     cards = []
@@ -2713,6 +3259,7 @@ def render_hot_movies_top5(catalog: pd.DataFrame, top_n: int = 5) -> None:
                 <span class="hot-movie-rank">Top {rank}</span>
                 {library_poster_html(movie_id, title, title_zh, genres_zh, row.get("Release Year"), css_class="hot-movie-poster-wrap")}
                 <div class="hot-movie-title">{html.escape(title_zh)}</div>
+                <div class="hot-movie-genre">{html.escape(genres_zh)}</div>
                 <div class="hot-movie-meta">
                     <span class="rating">{rating_text}</span>　评分数 {int(row['Ratings']):,}
                 </div>
@@ -2720,6 +3267,116 @@ def render_hot_movies_top5(catalog: pd.DataFrame, top_n: int = 5) -> None:
             """
         )
     render_html_block(f'<div class="hot-movie-grid">{"".join(cards)}</div>')
+
+
+def render_hot_movies_top5(catalog: pd.DataFrame, top_n: int = 5) -> None:
+    """Admin home: 热门电影 Top N as a row of equal-size `.hot-movie-card` cards."""
+    rows = popular_movies(catalog, "Weighted Score", top_n).reset_index(drop=True)
+    render_movie_card_grid(rows)
+
+
+def render_top_rated_movies(catalog: pd.DataFrame, top_n: int = 4, min_ratings: int = 10) -> None:
+    """评分记录页: 评分最高电影 Top N，过滤评分数过少的电影以避免冷门误导。"""
+    pool = catalog[catalog["Ratings"] >= min_ratings]
+    if len(pool) < top_n:
+        pool = catalog[catalog["Ratings"] >= 1]
+    rows = pool.sort_values(
+        ["Average Rating", "Ratings"], ascending=[False, False]
+    ).head(top_n)
+    render_movie_card_grid(rows, empty_message="暂无评分数据。")
+
+
+def render_movie_detail_card(row: pd.Series) -> None:
+    """管理员电影库: 展示所选电影的海报与详细信息（海报路径、类型、评分等）。"""
+    title = str(row["Title"])
+    title_zh = get_display_title(title)
+    genres_zh = translate_genres(str(row["Genres"]))
+    movie_id = int(row["Movie ID"])
+    avg = float(row["Average Rating"]) if not pd.isna(row["Average Rating"]) else float("nan")
+    rating_text = f"⭐ {avg:.2f}" if not pd.isna(avg) else "暂无评分"
+    year = row.get("Release Year")
+    year_text = str(year) if year not in (None, "", "nan") and not pd.isna(year) else "未知"
+
+    poster_filename = str(row.get("Poster Filename", "") or "")
+    if poster_filename and (LOCAL_POSTER_DIR / poster_filename).is_file():
+        poster_path_text = f"{LOCAL_POSTER_DIR / poster_filename}（管理员设置）"
+    else:
+        local_path = local_poster_path(title, title_zh)
+        poster_path_text = str(local_path) if local_path is not None else "未找到本地海报"
+
+    imdb_link = build_safe_imdb_url(title)
+
+    render_html_block(
+        f"""
+        <div class="movie-detail-card">
+            {library_poster_html(movie_id, title, title_zh, genres_zh, year, css_class="movie-detail-poster", poster_filename=poster_filename)}
+            <div class="movie-detail-info">
+                <h3>{html.escape(title_zh)}</h3>
+                <div class="subtitle">{html.escape(title)}</div>
+                <div class="movie-detail-row"><span class="field-label">电影ID</span><span class="field-value">{movie_id}</span></div>
+                <div class="movie-detail-row"><span class="field-label">类型</span><span class="field-value">{html.escape(genres_zh)}</span></div>
+                <div class="movie-detail-row"><span class="field-label">上映年份</span><span class="field-value">{html.escape(year_text)}</span></div>
+                <div class="movie-detail-row"><span class="field-label">平均评分</span><span class="field-value">{rating_text}</span></div>
+                <div class="movie-detail-row"><span class="field-label">评分人数</span><span class="field-value">{int(row['Ratings']):,}</span></div>
+                <div class="movie-detail-row"><span class="field-label">海报文件</span><span class="field-value">{html.escape(poster_path_text)}</span></div>
+                <div class="movie-detail-row"><span class="field-label">IMDb</span><span class="field-value"><a href="{html.escape(imdb_link)}" target="_blank" style="color: var(--vivid);">查看 IMDb 页面</a></span></div>
+            </div>
+        </div>
+        """
+    )
+
+
+def render_admin_movie_edit_form(row: pd.Series, editable_movies: pd.DataFrame, username: str) -> None:
+    """管理员电影库编辑表单：标题、类型、上映年份、海报文件名。
+
+    修改通过 `db.update_movie` 写入本地 SQLite 数据库（`data/processed/app.db`），
+    不会覆盖原始 MovieLens 数据文件；电影目录/详情页读取时会合并这些修改。
+    """
+    movie_id = int(row["Movie ID"])
+    title = str(row["Title"])
+    title_zh = get_display_title(title)
+    movie_row = editable_movies.loc[editable_movies["movie_id"] == movie_id].iloc[0]
+    genre_cols = display_genre_columns(editable_movies)
+    genre_options = genre_options_zh(editable_movies)
+    current_genres_zh = [
+        GENRE_ZH.get(genre, genre) for genre in genre_cols if int(movie_row.get(genre, 0) or 0) == 1
+    ]
+    poster_filename = str(movie_row.get("poster_filename", "") or "")
+    try:
+        release_year_val = int(movie_row.get("release_year", 0) or 0)
+    except (TypeError, ValueError):
+        release_year_val = 0
+
+    st.markdown(
+        f'<div class="admin-subtitle">正在编辑《{html.escape(title_zh)}》（电影ID #{movie_id}）。'
+        "修改将保存到本地数据库，不会覆盖原始 MovieLens 数据文件。</div>",
+        unsafe_allow_html=True,
+    )
+    with st.form(key=f"admin_edit_form_{movie_id}"):
+        new_title = st.text_input("显示标题", value=title, key=f"admin_edit_title_{movie_id}")
+        new_genres_zh = st.multiselect(
+            "电影类型", genre_options, default=current_genres_zh, key=f"admin_edit_genres_{movie_id}"
+        )
+        new_year = st.number_input(
+            "上映年份", min_value=0, max_value=2100, value=release_year_val, step=1, key=f"admin_edit_year_{movie_id}"
+        )
+        new_poster = st.text_input(
+            "海报文件名（位于“电影照片”目录下，留空则使用自动匹配）",
+            value=poster_filename,
+            key=f"admin_edit_poster_{movie_id}",
+        )
+        submitted = st.form_submit_button("保存修改", use_container_width=True)
+
+    if submitted:
+        updates: dict[str, object] = {"title": new_title}
+        for genre_col in genre_cols:
+            genre_zh = GENRE_ZH.get(genre_col, genre_col)
+            updates[genre_col] = 1 if genre_zh in new_genres_zh else 0
+        updates["release_year"] = int(new_year) if new_year else ""
+        updates["poster_filename"] = new_poster.strip()
+        db.update_movie(movie_id, updates, administrator=username)
+        st.success(f"电影 #{movie_id} 的信息已更新并保存到本地数据库。")
+        st.rerun()
 
 
 def render_catalog_cards(catalog_rows: pd.DataFrame, rank_offset: int = 1) -> None:
@@ -2823,6 +3480,59 @@ def movie_card_html(row: pd.Series) -> str:
                 <span class="year">{html.escape(year_text)}</span>
             </div>
             <div class="movie-grid-genres">{html.escape(genres_zh)}</div>
+        </div>
+        """
+
+
+def admin_movie_card_html(row: pd.Series) -> str:
+    """Build the `.admin-movie-card` HTML for one catalog row (海报、标题、类型、评分、年份、ID、评分人数)."""
+    movie_id = int(row["Movie ID"])
+    avg = float(row["Average Rating"]) if not pd.isna(row["Average Rating"]) else float("nan")
+    title = str(row["Title"])
+    title_zh = get_display_title(title)
+    genres_zh = translate_genres(str(row["Genres"]))
+    year = row.get("Release Year")
+    rating_text = f"⭐ {avg:.2f}" if not pd.isna(avg) else "暂无评分"
+    year_text = str(year) if year and str(year).strip() else "未知"
+    poster_filename = str(row.get("Poster Filename", "") or "")
+    return f"""
+        <div class="admin-movie-card">
+            {library_poster_html(movie_id, title, title_zh, genres_zh, year, css_class="admin-movie-poster", poster_filename=poster_filename)}
+            <div class="admin-movie-card-title">{html.escape(title_zh)}</div>
+            <div class="admin-movie-card-meta">
+                <span class="rating">{rating_text}</span>
+                <span class="year">{html.escape(year_text)}</span>
+            </div>
+            <div class="admin-movie-card-genres">{html.escape(genres_zh)}</div>
+            <div class="admin-movie-card-extra">
+                <span>电影ID #{movie_id}</span>
+                <span>评分人数 {int(row['Ratings']):,}</span>
+            </div>
+        </div>
+        """
+
+
+def genre_recommendation_card_html(row: pd.Series, reason_text: str) -> str:
+    """Build a `.reco-movie-card`: 海报、标题、类型、年份、评分、推荐理由（"相似电影"页使用）。"""
+    movie_id = int(row["Movie ID"])
+    avg = float(row["Average Rating"]) if not pd.isna(row["Average Rating"]) else float("nan")
+    title = str(row["Title"])
+    title_zh = get_display_title(title)
+    genres_zh = translate_genres(str(row["Genres"]))
+    year = row.get("Release Year")
+    rating_text = f"⭐ {avg:.2f}" if not pd.isna(avg) else "暂无评分"
+    year_text = str(year) if year and str(year).strip() and str(year).lower() != "nan" else ""
+    poster_filename = str(row.get("Poster Filename", "") or "")
+    return f"""
+        <div class="reco-movie-card">
+            {library_poster_html(movie_id, title, title_zh, genres_zh, year, css_class="reco-movie-poster", poster_filename=poster_filename)}
+            <div class="reco-movie-title">{html.escape(title_zh)}</div>
+            <div class="reco-movie-meta">
+                <span class="rating">{rating_text}</span>
+                <span class="year">{html.escape(year_text)}</span>
+            </div>
+            <div class="reco-movie-genres">{html.escape(genres_zh)}</div>
+            <div class="reco-movie-reason">{html.escape(reason_text)}</div>
         </div>
         """
 
@@ -3119,6 +3829,29 @@ def render_catalog_page(
         st.markdown('<div class="section-title">用户评分记录</div>', unsafe_allow_html=True)
         st.caption("MovieLens 100K 数据集记录了用户的显式评分及对应的 Unix 时间戳。")
 
+        st.markdown('<div class="section-title">最高评分电影</div>', unsafe_allow_html=True)
+        user_ratings_raw = ratings.loc[ratings["user_id"] == user_id]
+        if user_ratings_raw.empty:
+            st.info("暂无评分记录，去“浏览与搜索”页面为喜欢的电影打分吧。")
+        else:
+            top_rated = user_ratings_raw.sort_values(
+                ["rating", "timestamp"], ascending=[False, False]
+            ).head(6).merge(movies, on="movie_id", how="left")
+            cards = []
+            for _, row in top_rated.iterrows():
+                movie_id = int(row["movie_id"])
+                title = str(row["title"])
+                title_zh = get_display_title(title)
+                genres_zh = translate_genres(movie_genre_text(row, movies))
+                year = row.get("release_year")
+                date_text = pd.to_datetime(int(row["timestamp"]), unit="s").strftime("%Y-%m-%d")
+                cards.append(
+                    my_rating_card_html(
+                        movie_id, title_zh, genres_zh, year, row["rating"], "", date_text, show_review=False
+                    )
+                )
+            render_html_block(f'<div class="rep-movie-grid">{"".join(cards)}</div>')
+
         history = user_history_table(ratings, movies, user_id)
         rating_metric_cols = st.columns(4)
         rating_metric_cols[0].metric("已评分电影数", f"{len(history):,}")
@@ -3171,6 +3904,9 @@ def render_catalog_page(
             "最高评分数", f"{int(ranking['Ratings'].max()):,}" if not ranking.empty else "暂无"
         )
 
+        st.markdown('<div class="section-title">热门电影 Top 10</div>', unsafe_allow_html=True)
+        render_movie_card_grid(ranking.head(10), empty_message="暂无热门电影数据。")
+
         display_ranking = pd.DataFrame(
             {
                 "排名": [rank_badge_html(idx + 1) for idx in range(len(ranking))],
@@ -3218,6 +3954,80 @@ def render_catalog_page(
             st.bar_chart(recommendation_genre_counts(chart_recs))
 
     with catalog_tabs[5]:
+        account = st.session_state.get("account")
+        rated_ids = set(ratings.loc[ratings["user_id"] == user_id, "movie_id"].astype(int))
+
+        preferred_genres_zh: list[str] = []
+        fav_ids: list[int] = []
+        if account is not None:
+            account_id = int(account["account_id"])
+            prefs = accounts.get_preferences(account_id)
+            if prefs:
+                preferred_genres_zh = [g for g in prefs.get("genres", []) if g]
+            fav_ids = accounts.list_favorites(account_id)
+        excluded_ids = rated_ids | set(fav_ids)
+
+        st.markdown('<div class="section-title">基于你喜欢的类型推荐</div>', unsafe_allow_html=True)
+        if preferred_genres_zh:
+            english_genres = {GENRE_EN_BY_ZH.get(g, g) for g in preferred_genres_zh}
+            genre_pattern = "|".join(re.escape(g) for g in english_genres)
+            candidates = catalog[
+                catalog["Genres"].str.contains(genre_pattern, case=False, na=False, regex=True)
+                & ~catalog["Movie ID"].isin(excluded_ids)
+            ]
+            if candidates.empty:
+                st.info("暂无符合你偏好类型的新电影，去探索更多电影吧。")
+            else:
+                ranked = popular_movies(candidates, "Weighted Score", 8)
+                cards = []
+                for _, row in ranked.iterrows():
+                    movie_genres_zh = {g.strip() for g in translate_genres(str(row["Genres"])).split("、") if g.strip()}
+                    matched_zh = [g for g in preferred_genres_zh if g in movie_genres_zh]
+                    matched_text = "、".join(matched_zh) if matched_zh else "、".join(preferred_genres_zh)
+                    reason = f"因为你喜欢「{matched_text}」"
+                    cards.append(genre_recommendation_card_html(row, reason))
+                render_html_block(f'<div class="rep-movie-grid">{"".join(cards)}</div>')
+        else:
+            st.info("你还没有设置偏好类型，前往“我的画像”页面注册偏好后可获取个性化推荐。")
+
+        st.markdown('<div class="section-title">基于你的收藏相似推荐</div>', unsafe_allow_html=True)
+        if not fav_ids:
+            st.info("你还没有收藏电影，收藏更多电影后可以生成更准确的相似电影推荐。")
+        else:
+            fav_catalog = catalog[catalog["Movie ID"].isin(fav_ids)]
+            fav_genre_set: set[str] = set()
+            for genres_str in fav_catalog["Genres"]:
+                fav_genre_set.update(g.strip() for g in str(genres_str).split(",") if g.strip())
+
+            if not fav_genre_set:
+                st.info("暂无法从你的收藏中识别出电影类型，去收藏更多电影试试。")
+            else:
+                candidates2 = catalog[~catalog["Movie ID"].isin(rated_ids | set(fav_ids))].copy()
+
+                def _overlap_count(genres_str: str) -> int:
+                    movie_genres = {g.strip() for g in str(genres_str).split(",") if g.strip()}
+                    return len(movie_genres & fav_genre_set)
+
+                candidates2["__overlap"] = candidates2["Genres"].map(_overlap_count)
+                candidates2 = candidates2[candidates2["__overlap"] > 0]
+                if candidates2.empty:
+                    st.info("暂无与你收藏的电影类型相似的新电影，去探索更多电影吧。")
+                else:
+                    ranked2 = popular_movies(candidates2, "Weighted Score", len(candidates2))
+                    ranked2 = ranked2.sort_values(
+                        ["__overlap", "Weighted Score"], ascending=False
+                    ).head(8)
+                    cards = []
+                    for _, row in ranked2.iterrows():
+                        movie_genres = {g.strip() for g in str(row["Genres"]).split(",") if g.strip()}
+                        overlap_zh = "、".join(
+                            GENRE_ZH.get(g, g) for g in movie_genres & fav_genre_set
+                        )
+                        reason = f"与你收藏的电影类型相似（{overlap_zh}）"
+                        cards.append(genre_recommendation_card_html(row, reason))
+                    render_html_block(f'<div class="rep-movie-grid">{"".join(cards)}</div>')
+
+        st.markdown('<div class="section-title">按电影查找相似电影</div>', unsafe_allow_html=True)
         item_cf = load_item_cf_configured(ratings)
         title_opts = build_title_options(movies)
         selected_label = st.selectbox(
@@ -3284,17 +4094,25 @@ def my_rating_card_html(
     rating: float,
     review: str,
     date_text: str,
+    show_review: bool = True,
 ) -> str:
-    """Build a `.rating-grid-card` for one rated movie: poster, title, score, review, date."""
+    """Build a `.rating-grid-card` for one rated movie: poster, title, genres, score, date, (review)."""
     rating_text = f"⭐ {int(rating)}/5"
-    if review.strip():
-        review_html = f'<div class="rating-grid-review">{html.escape(review)}</div>'
-    else:
-        review_html = '<div class="rating-grid-review empty">暂无评价内容</div>'
+    review_html = ""
+    if show_review:
+        if review.strip():
+            review_html = f'<div class="rating-grid-review">{html.escape(review)}</div>'
+        else:
+            review_html = '<div class="rating-grid-review empty">暂无评价内容</div>'
+    year_text = str(year) if year and str(year).strip() and str(year).lower() != "nan" else ""
+    genres_line = html.escape(genres_zh)
+    if year_text:
+        genres_line = f"{html.escape(year_text)} · {genres_line}" if genres_line else html.escape(year_text)
     return f"""
         <div class="rating-grid-card">
             {library_poster_html(movie_id, title_zh, title_zh, genres_zh, year, css_class="rating-grid-poster")}
             <div class="rating-grid-title">{html.escape(title_zh)}</div>
+            <div class="rating-grid-genres">{genres_line}</div>
             <div class="rating-grid-meta">
                 <span class="rating">{rating_text}</span>
                 <span class="rating-grid-date">{html.escape(date_text)}</span>
@@ -3379,7 +4197,7 @@ def render_account_center_page(account: dict, ml_user_id: int) -> None:
 def render_profile_analytics_page(
     ratings: pd.DataFrame, movies: pd.DataFrame, catalog: pd.DataFrame, ml_user_id: int
 ) -> None:
-    """我的画像：评分行为统计（类型偏好 / 年代偏好 / 平均评分）+ 注册偏好与推荐来源。"""
+    """我的画像：电影兴趣分析仪表盘（用户画像、偏好类型、评分行为、推荐解释、代表性电影）。"""
     st.markdown('<div class="section-title">我的画像</div>', unsafe_allow_html=True)
 
     account = st.session_state.get("account")
@@ -3391,6 +4209,7 @@ def render_profile_analytics_page(
 
     user_ratings = ratings.loc[ratings["user_id"] == ml_user_id]
     n_ratings = len(user_ratings)
+    avg_given = float(user_ratings["rating"].mean()) if n_ratings else float("nan")
 
     if n_ratings >= 5:
         source_label = T["profile_source_cf"]
@@ -3410,16 +4229,119 @@ def render_profile_analytics_page(
                 catalog["Genres"].str.contains(pattern, case=False, na=False, regex=True).sum()
             )
 
+    # --- Rating-history-derived genre / era profile -----------------------
+    merged = pd.DataFrame()
+    genre_counts: dict[str, int] = {}
+    top_genres: list[tuple[str, int]] = []
+    genre_avg_rating: dict[str, float] = {}
+    year_range = "未设置"
+    decade_counts: pd.Series = pd.Series(dtype=int)
+    top_decade_label = "未设置"
+    if not user_ratings.empty:
+        merged = user_ratings.merge(movies, on="movie_id", how="left")
+        genre_cols = display_genre_columns(movies)
+        raw_counts = {g: int(merged[g].sum()) for g in genre_cols if g in merged.columns}
+        genre_counts = {translate_genres(g): c for g, c in raw_counts.items() if c > 0}
+        top_genres = sorted(genre_counts.items(), key=lambda kv: kv[1], reverse=True)[:5]
+
+        for g in genre_cols:
+            if g not in merged.columns:
+                continue
+            subset = merged.loc[merged[g] == 1, "rating"]
+            if len(subset) >= 2:
+                genre_avg_rating[translate_genres(g)] = float(subset.mean())
+
+        years = pd.to_numeric(merged.get("release_year"), errors="coerce").dropna()
+        if not years.empty:
+            year_range = f"{int(years.min())}–{int(years.max())}"
+            decades = (years // 10 * 10).astype(int)
+            decade_counts = decades.value_counts().sort_index()
+            if not decade_counts.empty:
+                top_decade = int(decade_counts.idxmax())
+                top_decade_label = f"{top_decade}s"
+
+    username = html.escape(str(account["username"])) if account else "访客"
+    preferred_genres_text = "、".join(preferred_genres_zh) if preferred_genres_zh else "未设置"
+    most_rated_genre_text = "、".join(g for g, _ in top_genres) if top_genres else "未设置"
+    top_rated_genre = max(genre_avg_rating.items(), key=lambda kv: kv[1])[0] if genre_avg_rating else "未设置"
+    avg_text = f"{avg_given:.2f} / 5" if n_ratings else "暂无"
+
+    # ======================================================================
+    # 1. 用户画像头部卡片
+    # ======================================================================
     render_html_block(
         f"""
-        <div class="stat-grid">
-            <div class="stat-card"><div class="value">{'、'.join(preferred_genres_zh) or '暂无'}</div><div class="label">{T['profile_preferred_genres']}</div></div>
-            <div class="stat-card"><div class="value">{preferred_genre_movie_count:,}</div><div class="label">{T['profile_preferred_genre_movie_count']}</div></div>
-            <div class="stat-card"><div class="value">{source_label}</div><div class="label">{T['profile_recommendation_source']}</div></div>
+        <div class="persona-hero-card">
+            <div class="persona-hero-glow"></div>
+            <div class="persona-hero-title">我的电影画像</div>
+            <div class="persona-hero-subtitle">基于你的评分历史、偏好类型与推荐结果生成的个性化电影兴趣分析。</div>
+            <div class="persona-hero-grid">
+                <div class="persona-hero-item"><div class="persona-hero-label">用户名</div><div class="persona-hero-value">{username}</div></div>
+                <div class="persona-hero-item"><div class="persona-hero-label">用户ID</div><div class="persona-hero-value">{int(ml_user_id)}</div></div>
+                <div class="persona-hero-item"><div class="persona-hero-label">偏好类型</div><div class="persona-hero-value">{html.escape(preferred_genres_text)}</div></div>
+                <div class="persona-hero-item"><div class="persona-hero-label">推荐来源</div><div class="persona-hero-value">{html.escape(source_label)}</div></div>
+                <div class="persona-hero-item"><div class="persona-hero-label">平均评分</div><div class="persona-hero-value">{avg_text}</div></div>
+                <div class="persona-hero-item"><div class="persona-hero-label">评分总数</div><div class="persona-hero-value">{n_ratings:,}</div></div>
+                <div class="persona-hero-item"><div class="persona-hero-label">最常评分类型</div><div class="persona-hero-value">{html.escape(most_rated_genre_text)}</div></div>
+                <div class="persona-hero-item"><div class="persona-hero-label">偏好年代</div><div class="persona-hero-value">{html.escape(year_range)}</div></div>
+            </div>
         </div>
         """
     )
 
+    # ======================================================================
+    # 2. 偏好概览卡片
+    # ======================================================================
+    render_html_block(
+        f"""
+        <div class="persona-stat-grid">
+            <div class="persona-stat-card">
+                <div class="icon">🎭</div>
+                <div class="value accent">{html.escape(preferred_genres_text)}</div>
+                <div class="label">{T['profile_preferred_genres']}</div>
+            </div>
+            <div class="persona-stat-card">
+                <div class="icon">🎬</div>
+                <div class="value">{preferred_genre_movie_count:,}</div>
+                <div class="label">{T['profile_preferred_genre_movie_count']}</div>
+            </div>
+            <div class="persona-stat-card">
+                <div class="icon">🤝</div>
+                <div class="value">{html.escape(source_label)}</div>
+                <div class="label">{T['profile_recommendation_source']}</div>
+            </div>
+            <div class="persona-stat-card">
+                <div class="icon">⭐</div>
+                <div class="value accent">{avg_text}</div>
+                <div class="label">平均评分</div>
+            </div>
+            <div class="persona-stat-card">
+                <div class="icon">📝</div>
+                <div class="value">{n_ratings:,}</div>
+                <div class="label">评分总数</div>
+            </div>
+            <div class="persona-stat-card">
+                <div class="icon">🎞️</div>
+                <div class="value">{html.escape(most_rated_genre_text)}</div>
+                <div class="label">最常评分类型</div>
+            </div>
+            <div class="persona-stat-card">
+                <div class="icon">📅</div>
+                <div class="value">{html.escape(year_range)}</div>
+                <div class="label">偏好年代</div>
+            </div>
+            <div class="persona-stat-card">
+                <div class="icon">🏆</div>
+                <div class="value accent">{html.escape(top_rated_genre)}</div>
+                <div class="label">偏好高分类型</div>
+            </div>
+        </div>
+        """
+    )
+
+    # ======================================================================
+    # 3. 类型偏好可视化
+    # ======================================================================
     if preferred_genres_zh:
         pref_counts: dict[str, int] = {}
         for genre_zh in preferred_genres_zh:
@@ -3427,61 +4349,247 @@ def render_profile_analytics_page(
             pref_counts[genre_zh] = int(
                 catalog["Genres"].str.contains(re.escape(english_genre), case=False, na=False, regex=True).sum()
             )
-        try:
-            import plotly.express as px
+        pref_df = pd.DataFrame(sorted(pref_counts.items(), key=lambda kv: kv[1]), columns=["类型", "电影数量"])
+        fig = px.bar(
+            pref_df,
+            x="电影数量",
+            y="类型",
+            orientation="h",
+            text="电影数量",
+            color="电影数量",
+            color_continuous_scale=["#0f3d2e", "#00e676"],
+        )
+        fig.update_traces(texttemplate="%{text:,}", textposition="outside", marker_line_width=0)
+        fig.update_coloraxes(showscale=False)
+        fig = style_plotly_dark(fig, height=max(260, 56 * len(pref_df)))
+        fig.update_layout(margin=dict(l=10, r=30, t=10, b=10))
+        render_chart_card("用户偏好类型分布", "你在注册时选择的偏好类型，及片库中对应的电影数量。", fig)
 
-            pref_df = pd.DataFrame(sorted(pref_counts.items(), key=lambda kv: kv[1]), columns=["类型", "电影数量"])
-            fig = px.bar(pref_df, x="电影数量", y="类型", orientation="h", title="用户偏好类型分布")
-            fig.update_layout(
-                paper_bgcolor="rgba(0,0,0,0)",
-                plot_bgcolor="rgba(0,0,0,0)",
-                font_color="#99aabb",
-                height=max(240, 28 * len(pref_df)),
-            )
-            st.plotly_chart(fig, use_container_width=True)
-        except ImportError:
-            st.bar_chart(pd.Series(pref_counts).sort_values())
-
+    # ======================================================================
+    # 4. 历史评分类型分布
+    # ======================================================================
     if user_ratings.empty:
-        st.info("暂无评分数据，评分相关画像（类型偏好/偏好年代/平均评分）将在你评分后生成。")
+        st.info("暂无评分数据，评分相关画像（类型评分分布/评分行为分析/代表性电影）将在你评分后生成。")
         return
 
-    merged = user_ratings.merge(movies, on="movie_id", how="left")
-    genre_cols = display_genre_columns(movies)
-    genre_counts = {g: int(merged[g].sum()) for g in genre_cols if g in merged.columns}
-    genre_counts = {translate_genres(g): c for g, c in genre_counts.items() if c > 0}
-    top_genres = sorted(genre_counts.items(), key=lambda kv: kv[1], reverse=True)[:5]
+    genre_df = pd.DataFrame(sorted(genre_counts.items(), key=lambda kv: kv[1]), columns=["类型", "评分次数"])
+    fig = px.bar(
+        genre_df,
+        x="评分次数",
+        y="类型",
+        orientation="h",
+        text="评分次数",
+        color="评分次数",
+        color_continuous_scale=["#0c3a52", "#40bcf4"],
+    )
+    fig.update_traces(texttemplate="%{text:,}", textposition="outside", marker_line_width=0)
+    fig.update_coloraxes(showscale=False)
+    fig = style_plotly_dark(fig, height=max(320, 32 * len(genre_df)))
+    fig.update_layout(margin=dict(l=10, r=30, t=10, b=10))
+    render_chart_card("类型评分分布", "你历史评分中各电影类型出现的次数（按评分次数排序）。", fig)
 
-    years = pd.to_numeric(merged.get("release_year"), errors="coerce").dropna()
-    year_range = f"{int(years.min())}-{int(years.max())}" if not years.empty else "未知"
-    avg_given = float(user_ratings["rating"].mean())
-
+    # ======================================================================
+    # 5. 评分行为分析
+    # ======================================================================
+    st.markdown('<div class="section-title">评分行为分析</div>', unsafe_allow_html=True)
     render_html_block(
         f"""
-        <div class="stat-grid">
-            <div class="stat-card"><div class="value">{', '.join(g for g, _ in top_genres) or '暂无'}</div><div class="label">喜欢类型</div></div>
-            <div class="stat-card"><div class="value">{year_range}</div><div class="label">偏好年代</div></div>
-            <div class="stat-card"><div class="value">{avg_given:.2f} / 5</div><div class="label">平均评分</div></div>
-            <div class="stat-card"><div class="value">{len(user_ratings):,}</div><div class="label">评分总数</div></div>
+        <div class="persona-stat-grid">
+            <div class="persona-stat-card">
+                <div class="icon">⭐</div>
+                <div class="value accent">{avg_text}</div>
+                <div class="label">平均评分</div>
+            </div>
+            <div class="persona-stat-card">
+                <div class="icon">🔺</div>
+                <div class="value">{int(user_ratings['rating'].max())} / 5</div>
+                <div class="label">最高评分</div>
+            </div>
+            <div class="persona-stat-card">
+                <div class="icon">🔻</div>
+                <div class="value">{int(user_ratings['rating'].min())} / 5</div>
+                <div class="label">最低评分</div>
+            </div>
+            <div class="persona-stat-card">
+                <div class="icon">📝</div>
+                <div class="value">{n_ratings:,}</div>
+                <div class="label">评分数量</div>
+            </div>
+            <div class="persona-stat-card">
+                <div class="icon">🏆</div>
+                <div class="value accent">{html.escape(top_rated_genre)}</div>
+                <div class="label">偏好高分类型</div>
+            </div>
+            <div class="persona-stat-card">
+                <div class="icon">🕰️</div>
+                <div class="value">{html.escape(top_decade_label)}</div>
+                <div class="label">最常评分年代</div>
+            </div>
         </div>
         """
     )
 
-    if genre_counts:
-        try:
-            import plotly.express as px
+    chart_cols = st.columns(2)
+    with chart_cols[0]:
+        rating_dist = user_ratings["rating"].value_counts().reindex([1, 2, 3, 4, 5], fill_value=0)
+        dist_df = pd.DataFrame({"评分": rating_dist.index.astype(str), "次数": rating_dist.values})
+        fig = px.bar(
+            dist_df,
+            x="评分",
+            y="次数",
+            text="次数",
+            color="次数",
+            color_continuous_scale=["#0f3d2e", "#00e676"],
+        )
+        fig.update_traces(texttemplate="%{text:,}", textposition="outside", marker_line_width=0)
+        fig.update_coloraxes(showscale=False)
+        fig = style_plotly_dark(fig)
+        render_chart_card("用户评分分布", "你给出的评分（1-5 星）的次数分布。", fig)
 
-            genre_df = pd.DataFrame(sorted(genre_counts.items(), key=lambda kv: kv[1]), columns=["类型", "评分次数"])
-            fig = px.bar(genre_df, x="评分次数", y="类型", orientation="h", title="类型偏好分布")
-            fig.update_layout(
-                paper_bgcolor="rgba(0,0,0,0)",
-                plot_bgcolor="rgba(0,0,0,0)",
-                font_color="#99aabb",
-                height=max(320, 28 * len(genre_df)),
+    with chart_cols[1]:
+        if not decade_counts.empty:
+            decade_df = pd.DataFrame(
+                {"年代": [f"{d}s" for d in decade_counts.index], "电影数量": decade_counts.values}
             )
-            st.plotly_chart(fig, use_container_width=True)
-        except ImportError:
-            st.bar_chart(pd.Series(genre_counts).sort_values())
+            fig = px.bar(
+                decade_df,
+                x="年代",
+                y="电影数量",
+                text="电影数量",
+                color="电影数量",
+                color_continuous_scale=["#0c3a52", "#40bcf4"],
+            )
+            fig.update_traces(texttemplate="%{text:,}", textposition="outside", marker_line_width=0)
+            fig.update_coloraxes(showscale=False)
+            fig = style_plotly_dark(fig)
+            render_chart_card("评分年代分布", "你评分过的电影按上映年代统计，反映你常关注的电影年代。", fig)
+        else:
+            st.info("暂无足够的上映年份数据，无法生成评分年代分布。")
+
+    # ======================================================================
+    # 6. 电影兴趣标签
+    # ======================================================================
+    st.markdown('<div class="section-title">你的电影兴趣标签</div>', unsafe_allow_html=True)
+    tags: list[str] = []
+    for genre_zh, tag in (
+        ("科幻", "科幻爱好者"),
+        ("动画", "动画偏好"),
+        ("剧情", "剧情片关注者"),
+        ("喜剧", "喜剧片爱好者"),
+        ("动作", "动作片爱好者"),
+        ("惊悚", "惊悚片爱好者"),
+        ("爱情", "爱情片爱好者"),
+        ("恐怖", "恐怖片探索者"),
+    ):
+        if genre_zh in preferred_genres_zh or genre_zh in dict(top_genres):
+            tags.append(tag)
+
+    if n_ratings and avg_given >= 4.0:
+        tags.append("高分筛选型用户")
+    elif n_ratings and avg_given <= 2.5:
+        tags.append("严格评分型用户")
+
+    if not years.empty and years.min() < 1980:
+        tags.append("经典电影探索者")
+
+    if source_label == T["profile_source_cf"]:
+        tags.append("协同过滤推荐适配")
+    elif source_label == T["profile_source_registration"]:
+        tags.append("偏好冷启动适配")
+
+    if not tags:
+        tags.append("电影探索新手")
+
+    tag_html = "".join(f'<span class="taste-tag">{html.escape(tag)}</span>' for tag in dict.fromkeys(tags))
+    render_html_block(f'<div class="taste-tag-row">{tag_html}</div>')
+
+    # ======================================================================
+    # 7. 推荐解释卡片
+    # ======================================================================
+    st.markdown('<div class="section-title">为什么这样推荐？</div>', unsafe_allow_html=True)
+    pref_text = preferred_genres_text if preferred_genres_zh else "尚未设置的偏好类型"
+    render_html_block(
+        f"""
+        <div class="explain-card">
+            <div class="explain-title">为什么这样推荐？</div>
+            <div class="explain-body">
+                系统会综合你的注册偏好（<span class="accent">{html.escape(pref_text)}</span>）、
+                历史评分行为（共 <span class="accent">{n_ratings:,}</span> 条评分，平均 <span class="accent">{avg_text}</span>）
+                与相似用户的兴趣模式（协同过滤 UserCF / ItemCF / SVD），
+                优先推荐与你偏好类型相近、评分表现较高、且与相似用户口味一致的电影。
+                当前为你匹配的推荐方式为「<span class="accent">{html.escape(source_label)}</span>」。
+            </div>
+        </div>
+        """
+    )
+
+    # ======================================================================
+    # 8. 代表性高分电影
+    # ======================================================================
+    st.markdown('<div class="section-title">代表性高分电影</div>', unsafe_allow_html=True)
+
+    catalog_indexed = catalog.set_index("Movie ID")
+    rep_rows: list[dict[str, object]] = []
+
+    high_rated = user_ratings.loc[user_ratings["rating"] >= 4].sort_values("rating", ascending=False)
+    for _, r in high_rated.head(5).iterrows():
+        movie_id = int(r["movie_id"])
+        if movie_id not in catalog_indexed.index:
+            continue
+        crow = catalog_indexed.loc[movie_id]
+        rep_rows.append(
+            {
+                "movie_id": movie_id,
+                "title": str(crow["Title"]),
+                "genres": str(crow["Genres"]),
+                "year": crow.get("Release Year"),
+                "score_label": "你的评分",
+                "score_text": f"⭐ {int(r['rating'])} / 5",
+            }
+        )
+
+    if len(rep_rows) < 3 and preferred_genres_zh:
+        english_genres = [GENRE_EN_BY_ZH.get(g, g) for g in preferred_genres_zh if g]
+        if english_genres:
+            pattern = "|".join(re.escape(g) for g in english_genres)
+            seen_ids = {row["movie_id"] for row in rep_rows}
+            pref_pool = catalog.loc[
+                catalog["Genres"].str.contains(pattern, case=False, na=False, regex=True)
+                & ~catalog["Movie ID"].isin(seen_ids)
+            ].sort_values(["Average Rating", "Ratings"], ascending=[False, False])
+            for _, crow in pref_pool.head(5 - len(rep_rows)).iterrows():
+                rep_rows.append(
+                    {
+                        "movie_id": int(crow["Movie ID"]),
+                        "title": str(crow["Title"]),
+                        "genres": str(crow["Genres"]),
+                        "year": crow.get("Release Year"),
+                        "score_label": "平均评分",
+                        "score_text": f"⭐ {float(crow['Average Rating']):.2f} / 5"
+                        if not pd.isna(crow["Average Rating"])
+                        else "暂无评分",
+                    }
+                )
+
+    if not rep_rows:
+        st.info("当前评分数据较少，继续评分后可生成更完整的电影画像。")
+    else:
+        cards = []
+        for row in rep_rows[:5]:
+            title = row["title"]
+            title_zh = get_display_title(title)
+            genres_zh = translate_genres(row["genres"])
+            cards.append(
+                f"""
+                <div class="rep-movie-card">
+                    {library_poster_html(row["movie_id"], title, title_zh, genres_zh, row["year"], css_class="rep-movie-poster")}
+                    <div class="rep-movie-title">{html.escape(title_zh)}</div>
+                    <div class="rep-movie-genre">{html.escape(genres_zh)}</div>
+                    <div class="rep-movie-rating">{row["score_text"]}　<span style="color: var(--cloud); font-weight: 600; font-size: 0.78rem;">（{row["score_label"]}）</span></div>
+                </div>
+                """
+            )
+        render_html_block(f'<div class="rep-movie-grid">{"".join(cards)}</div>')
 
     accounts.save_profile(
         account_id=st.session_state["account"]["account_id"],
@@ -3567,20 +4675,49 @@ def render_admin_module(
         if year_filter != T["label_all"]:
             filtered = filtered[pd.to_numeric(filtered["Release Year"], errors="coerce") == year_filter]
 
-        display_table = pd.DataFrame(
-            {
-                "电影ID": filtered["Movie ID"],
-                "中文片名": filtered["Title"].map(get_display_title),
-                "原片名": filtered["Title"],
-                "类型": filtered["Genres"].map(translate_genres),
-                "平均评分": filtered["Average Rating"].map(admin_rating_badge_html),
-                "评分人数": filtered["Ratings"],
-                "上映年份": filtered["Release Year"],
-            }
-        )
-        render_admin_table(display_table, html_columns={"平均评分"})
+        st.markdown('<div class="section-title">电影库</div>', unsafe_allow_html=True)
+        if filtered.empty:
+            st.info("未找到符合条件的电影。")
+        else:
+            display_movies = filtered.head(20)
+            st.caption(f"共找到 {len(filtered):,} 部电影，显示前 {len(display_movies)} 部。")
+            cards_per_row = 4
+            grid_rows = display_movies.reset_index(drop=True)
+            for start in range(0, len(grid_rows), cards_per_row):
+                grid_cols = st.columns(cards_per_row)
+                for col, (_, row) in zip(
+                    grid_cols, grid_rows.iloc[start : start + cards_per_row].iterrows(), strict=False
+                ):
+                    movie_id = int(row["Movie ID"])
+                    with col:
+                        render_html_block(admin_movie_card_html(row))
+                        action_cols = st.columns(2)
+                        if action_cols[0].button(
+                            "查看详情", key=f"admin_detail_{movie_id}", use_container_width=True
+                        ):
+                            st.session_state["admin_selected_movie_id"] = movie_id
+                            st.session_state["admin_movie_action"] = "detail"
+                        if action_cols[1].button(
+                            "编辑", key=f"admin_edit_{movie_id}", use_container_width=True
+                        ):
+                            st.session_state["admin_selected_movie_id"] = movie_id
+                            st.session_state["admin_movie_action"] = "edit"
 
-        with st.expander("添加 / 编辑 / 删除电影记录"):
+        st.markdown('<div class="section-title">电影详情 / 编辑</div>', unsafe_allow_html=True)
+        selected_movie_id = st.session_state.get("admin_selected_movie_id")
+        selected_action = st.session_state.get("admin_movie_action", "detail")
+        if selected_movie_id is not None and selected_movie_id in set(admin_catalog["Movie ID"]):
+            selected_movie_row = admin_catalog.loc[admin_catalog["Movie ID"] == selected_movie_id].iloc[0]
+            if selected_action == "edit":
+                render_admin_movie_edit_form(selected_movie_row, editable_movies, username)
+            else:
+                render_movie_detail_card(selected_movie_row)
+        else:
+            st.info("点击电影卡片上的“查看详情”或“编辑”以显示详细信息。")
+
+        with st.expander(
+            "添加 / 编辑 / 删除电影记录", expanded=st.session_state.get("admin_show_edit_expander", False)
+        ):
             action = st.radio(
                 "操作",
                 [T["btn_add_movie"], T["btn_edit_movie"], T["btn_delete_movie"]],
@@ -3642,8 +4779,26 @@ def render_admin_module(
         merged_users = user_stats.merge(
             accounts_df, left_on="user_id", right_on="movielens_user_id", how="left"
         ) if not accounts_df.empty else user_stats.assign(
-            username=None, email=None, is_active=None, n_favorites=0
+            account_id=np.nan, username=None, email=None, is_active=None, n_favorites=0
         )
+
+        preferences_df = accounts.list_preferences()
+        if not preferences_df.empty:
+            merged_users = merged_users.merge(preferences_df, on="account_id", how="left")
+        else:
+            merged_users["genres"] = None
+
+        def _preferred_genres_text(row: pd.Series) -> str:
+            # 已注册并设置了偏好类型的用户：直接显示其注册偏好。
+            genres = row.get("genres")
+            if isinstance(genres, list) and genres:
+                return "、".join(genres)
+            # 历史数据用户（或尚未设置偏好的注册用户）：根据评分历史推断偏好类型
+            # （优先统计评分 >= 4 的电影所属类型，按出现频次/平均分排序取前 3-5 个）。
+            inferred = infer_preferred_genres_zh(ratings, movies, int(row["user_id"]))
+            return inferred if inferred else "偏好数据不足"
+
+        merged_users["偏好电影类型"] = merged_users.apply(_preferred_genres_text, axis=1)
 
         top_user_row = user_stats.loc[user_stats["Ratings"].idxmax()]
         user_summary_cols = st.columns(5)
@@ -3656,11 +4811,16 @@ def render_admin_module(
         )
 
         search_cols = st.columns(2)
-        user_id_query = search_cols[0].text_input(f"{T['btn_search']}用户ID", key="admin_user_search_input")
+        user_id_query = search_cols[0].text_input(f"{T['btn_search']}用户ID（精确匹配）", key="admin_user_search_input")
         username_query = search_cols[1].text_input(f"{T['btn_search']}用户名", key="admin_user_username_search_input")
 
         if user_id_query.strip():
-            merged_users = merged_users[merged_users["user_id"].astype(str).str.contains(user_id_query.strip())]
+            try:
+                query_id = int(user_id_query.strip())
+                merged_users = merged_users[merged_users["user_id"] == query_id]
+            except ValueError:
+                st.warning("用户ID必须为整数。")
+                merged_users = merged_users.iloc[0:0]
         if username_query.strip():
             display_names = merged_users["username"].fillna(
                 "MovieLens用户-" + merged_users["user_id"].astype(str)
@@ -3681,6 +4841,7 @@ def render_admin_module(
                     "历史数据用户",
                     np.where(merged_users["is_active"] == 1, "活跃账号", "已禁用"),
                 ),
+                "偏好电影类型": merged_users["偏好电影类型"],
                 "活跃等级": merged_users["Ratings"].map(activity_tier_badge_html),
             }
         )
@@ -3688,6 +4849,47 @@ def render_admin_module(
             display_users.sort_values("评分数量", ascending=False),
             html_columns={"活跃等级"},
         )
+
+        st.markdown('<div class="section-title">用户详情 / 偏好编辑</div>', unsafe_allow_html=True)
+        registered_users = merged_users[merged_users["account_id"].notna()]
+        if registered_users.empty:
+            st.info("当前没有注册账号，无法编辑偏好类型。")
+        else:
+            option_labels = {
+                int(row["account_id"]): f"用户#{int(row['user_id'])} ({row['username']})"
+                for _, row in registered_users.iterrows()
+            }
+            selected_account_id = st.selectbox(
+                "选择用户",
+                options=list(option_labels.keys()),
+                format_func=lambda aid: option_labels[aid],
+                key="admin_user_detail_select",
+            )
+            selected_row = registered_users.loc[
+                registered_users["account_id"] == selected_account_id
+            ].iloc[0]
+            current_genres = selected_row["genres"] if isinstance(selected_row["genres"], list) else []
+
+            detail_cols = st.columns(4)
+            detail_cols[0].metric("用户ID", f"{int(selected_row['user_id'])}")
+            detail_cols[1].metric("用户名", str(selected_row["username"]))
+            detail_cols[2].metric("评分数量", f"{int(selected_row['Ratings']):,}")
+            detail_cols[3].metric(
+                "平均评分", f"{selected_row['Average_Rating']:.2f}" if not pd.isna(selected_row["Average_Rating"]) else "暂无"
+            )
+
+            new_genres = st.multiselect(
+                "偏好电影类型",
+                options=ONBOARDING_GENRES,
+                default=[g for g in current_genres if g in ONBOARDING_GENRES],
+                key="admin_user_genre_multiselect",
+            )
+            if st.button("保存偏好设置", key="admin_user_save_preferences_button"):
+                existing_prefs = accounts.get_preferences(int(selected_account_id))
+                seed_ids = existing_prefs["seed_movie_ids"] if existing_prefs else []
+                accounts.save_preferences(int(selected_account_id), genres=new_genres, seed_movie_ids=seed_ids)
+                st.success("用户偏好类型已更新。")
+                st.rerun()
 
     with admin_tabs[3]:
         st.markdown('<div class="section-title">评分记录管理</div>', unsafe_allow_html=True)
@@ -3700,15 +4902,22 @@ def render_admin_module(
         rating_summary_cols[2].metric("最高评分人次", f"{int(ratings['rating'].value_counts().max()):,}")
         rating_summary_cols[3].metric("最新评分日期", latest_ts.strftime("%Y-%m-%d"))
 
+        st.markdown('<div class="section-title">评分最高电影 Top 4</div>', unsafe_allow_html=True)
+        render_top_rated_movies(catalog, top_n=4, min_ratings=10)
+
+        st.markdown('<div class="section-title">评分记录查询</div>', unsafe_allow_html=True)
         filters = st.columns(3)
-        filter_user = filters[0].text_input(f"{T['btn_search']}用户ID", key="admin_rating_user_input")
+        filter_user = filters[0].text_input(f"{T['btn_search']}用户ID（精确匹配）", key="admin_rating_user_input")
         filter_movie = filters[1].text_input(f"{T['btn_search']}电影ID或标题", key="admin_rating_movie_input")
         filter_score = filters[2].selectbox(
             "筛选评分", [T["label_all"], 1, 2, 3, 4, 5], key="admin_rating_score_select"
         )
         rating_view = ratings.merge(movies[["movie_id", "title"]], on="movie_id", how="left")
         if filter_user.strip():
-            rating_view = rating_view[rating_view["user_id"].astype(str).str.contains(filter_user.strip())]
+            try:
+                rating_view = rating_view[rating_view["user_id"] == int(filter_user.strip())]
+            except ValueError:
+                rating_view = rating_view.iloc[0:0]
         if filter_movie.strip():
             needle = filter_movie.strip()
             rating_view = rating_view[
@@ -3788,7 +4997,13 @@ def render_admin_module(
 
     with admin_tabs[5]:
         st.markdown('<div class="section-title">模型评估</div>', unsafe_allow_html=True)
-        st.caption("在按用户时间序列划分的留出测试集上评估各算法的评分预测误差与 Top-10 排序质量（结果已缓存，刷新页面不会重新训练）。")
+        st.markdown(
+            '<div class="admin-subtitle">'
+            "在按用户时间序列划分的留出测试集上评估各算法的评分预测误差与 Top-10 排序质量"
+            "（结果已缓存，刷新页面不会重新训练）。"
+            "</div>",
+            unsafe_allow_html=True,
+        )
         if st.button(T["btn_run_evaluation"], key="admin_run_evaluation_button"):
             ranking_evaluation_summary.clear()
         eval_table = ranking_evaluation_summary(ratings, movies)
@@ -3807,18 +5022,95 @@ def render_admin_module(
         best_n = eval_table.loc[eval_table["NDCG@10"].idxmax()]
         metric_cols[5].metric("最优 NDCG@10", f"{best_n['NDCG@10']:.3f}", best_n["Algorithm"])
 
-        st.dataframe(translate_columns(eval_table), use_container_width=True, hide_index=True)
+        st.markdown('<div class="section-title">评估结果明细</div>', unsafe_allow_html=True)
+        eval_display = translate_columns(eval_table).copy()
+        for col in ("MAE", "RMSE", "Precision@10", "Recall@10", "HitRate@10", "NDCG@10"):
+            if col in eval_display.columns:
+                eval_display[col] = eval_display[col].map(lambda v: f"{v:.3f}")
+        render_admin_table(eval_display)
 
+        st.markdown('<div class="section-title">可视化对比</div>', unsafe_allow_html=True)
         chart_cols = st.columns(2)
         with chart_cols[0]:
-            st.markdown("**预测误差对比（越低越好）**")
-            st.bar_chart(eval_table.set_index("Algorithm")[["MAE", "RMSE"]])
+            error_fig = go.Figure()
+            for metric_name, color in (("MAE", "#40bcf4"), ("RMSE", "#00e676")):
+                error_fig.add_bar(
+                    name=metric_name,
+                    x=eval_table["Algorithm"],
+                    y=eval_table[metric_name],
+                    marker_color=color,
+                    text=eval_table[metric_name].map(lambda v: f"{v:.3f}"),
+                    textposition="outside",
+                )
+            error_fig.update_layout(barmode="group")
+            error_fig = style_plotly_dark(error_fig)
+            error_fig.update_layout(showlegend=True)
+            render_chart_card("预测误差对比", "MAE / RMSE（数值越低越好）", error_fig)
+
         with chart_cols[1]:
-            st.markdown("**Top-10 排序质量对比（越高越好）**")
-            st.bar_chart(eval_table.set_index("Algorithm")[["Precision@10", "Recall@10", "HitRate@10", "NDCG@10"]])
+            ranking_fig = go.Figure()
+            for metric_name, color in (
+                ("Precision@10", "#00e676"),
+                ("Recall@10", "#00c853"),
+                ("HitRate@10", "#40bcf4"),
+                ("NDCG@10", "#ffd166"),
+            ):
+                ranking_fig.add_bar(
+                    name=metric_name,
+                    x=eval_table["Algorithm"],
+                    y=eval_table[metric_name],
+                    marker_color=color,
+                    text=eval_table[metric_name].map(lambda v: f"{v:.3f}"),
+                    textposition="outside",
+                )
+            ranking_fig.update_layout(barmode="group")
+            ranking_fig = style_plotly_dark(ranking_fig)
+            ranking_fig.update_layout(showlegend=True)
+            render_chart_card("Top-10 排序质量对比", "Precision@10 / Recall@10 / HitRate@10 / NDCG@10（数值越高越好）", ranking_fig)
+
+        st.markdown('<div class="section-title">综合模型表现雷达图</div>', unsafe_allow_html=True)
+        radar_metrics = ["MAE", "RMSE", "Precision@10", "Recall@10", "HitRate@10", "NDCG@10"]
+        radar_df = eval_table.set_index("Algorithm")[radar_metrics]
+        normalized = pd.DataFrame(index=radar_df.index)
+        for metric_name in radar_metrics:
+            col = radar_df[metric_name]
+            span = col.max() - col.min()
+            score = (col - col.min()) / span if span > 0 else pd.Series(1.0, index=col.index)
+            if metric_name in ("MAE", "RMSE"):
+                score = 1 - score
+            normalized[metric_name] = score
+
+        radar_fig = go.Figure()
+        radar_colors = ["#00e676", "#40bcf4", "#ffd166", "#ff6b81"]
+        for idx, (algorithm, row) in enumerate(normalized.iterrows()):
+            values = row.tolist()
+            radar_fig.add_trace(
+                go.Scatterpolar(
+                    r=values + values[:1],
+                    theta=radar_metrics + radar_metrics[:1],
+                    fill="toself",
+                    name=algorithm,
+                    line=dict(color=radar_colors[idx % len(radar_colors)]),
+                )
+            )
+        radar_fig.update_layout(
+            polar=dict(
+                bgcolor="rgba(0,0,0,0)",
+                radialaxis=dict(visible=True, range=[0, 1], gridcolor="rgba(255,255,255,0.10)", color="#9fb3c8"),
+                angularaxis=dict(gridcolor="rgba(255,255,255,0.10)", color="#9fb3c8"),
+            ),
+            showlegend=True,
+        )
+        radar_fig = style_plotly_dark(radar_fig, height=440)
+        radar_fig.update_layout(showlegend=True)
+        render_chart_card("综合模型表现雷达图", "各指标归一化后的横向对比（数值越大越好）", radar_fig)
 
     with admin_tabs[6]:
         st.markdown('<div class="section-title">系统统计仪表盘</div>', unsafe_allow_html=True)
+        st.markdown(
+            '<div class="admin-subtitle">数据集规模、用户行为与内容结构的全局视图。</div>',
+            unsafe_allow_html=True,
+        )
         if st.button(T["btn_refresh_data"], key="admin_stats_refresh_button"):
             st.rerun()
 
@@ -3833,42 +5125,114 @@ def render_admin_module(
         sparsity = 1 - len(ratings) / (ratings["user_id"].nunique() * movies["movie_id"].nunique())
         local_poster_count = len(build_local_poster_index()["exact"])
 
-        health_cols = st.columns(6)
-        health_cols[0].metric("MovieLens用户数", f"{ratings['user_id'].nunique():,}")
-        health_cols[1].metric("电影总数", f"{movies['movie_id'].nunique():,}")
-        health_cols[2].metric("评分总数", f"{len(ratings):,}")
-        health_cols[3].metric("数据稀疏度", f"{sparsity * 100:.2f}%")
-        health_cols[4].metric("本地海报数量", f"{local_poster_count:,}")
-        health_cols[5].metric("数据库状态", db_status)
+        render_html_block(
+            f"""
+            <div class="sys-stat-grid">
+                <div class="sys-stat-card"><div class="icon">👥</div><div class="value">{ratings['user_id'].nunique():,}</div><div class="label">用户数</div></div>
+                <div class="sys-stat-card"><div class="icon">🎬</div><div class="value">{movies['movie_id'].nunique():,}</div><div class="label">电影数</div></div>
+                <div class="sys-stat-card"><div class="icon">⭐</div><div class="value">{len(ratings):,}</div><div class="label">评分总数</div></div>
+                <div class="sys-stat-card"><div class="icon">📉</div><div class="value">{sparsity * 100:.2f}%</div><div class="label">数据稀疏度</div></div>
+                <div class="sys-stat-card"><div class="icon">🖼️</div><div class="value">{local_poster_count:,}</div><div class="label">本地海报数量</div></div>
+                <div class="sys-stat-card"><div class="icon">🟢</div><div class="value">{db_status}</div><div class="label">数据库状态</div></div>
+            </div>
+            """
+        )
 
-        chart_cols = st.columns(2)
-        with chart_cols[0]:
-            st.markdown("**评分分布**")
-            st.bar_chart(ratings["rating"].value_counts().sort_index())
-        with chart_cols[1]:
-            st.markdown("**电影类型分布**")
-            genre_totals = {
-                genre: int(movies[genre].sum())
-                for genre in display_genre_columns(movies)
-                if genre in movies
+        st.markdown('<div class="section-title">数据分布概览</div>', unsafe_allow_html=True)
+        chart_row1 = st.columns(2)
+        with chart_row1[0]:
+            rating_counts_series = ratings["rating"].value_counts().sort_index()
+            fig = px.bar(
+                x=rating_counts_series.index.astype(str),
+                y=rating_counts_series.values,
+                color=rating_counts_series.values,
+                color_continuous_scale=["#0a3d2e", "#00c853", "#00e676"],
+                labels={"x": "评分", "y": "评分数量"},
+                text=rating_counts_series.values,
+            )
+            fig.update_traces(texttemplate="%{text:,}", textposition="outside", marker_line_width=0)
+            fig.update_layout(coloraxis_showscale=False)
+            fig = style_plotly_dark(fig)
+            render_chart_card("评分分布", "各评分等级（1～5星）的评分数量分布", fig)
+
+        with chart_row1[1]:
+            genre_totals = pd.Series(
+                {
+                    genre: int(movies[genre].sum())
+                    for genre in display_genre_columns(movies)
+                    if genre in movies
+                }
+            ).sort_values(ascending=True)
+            fig = px.bar(
+                x=genre_totals.values,
+                y=[GENRE_ZH.get(g, g) for g in genre_totals.index],
+                orientation="h",
+                color=genre_totals.values,
+                color_continuous_scale=["#0a3d2e", "#00c853", "#00e676"],
+                labels={"x": "电影数量", "y": "类型"},
+                text=genre_totals.values,
+            )
+            fig.update_traces(texttemplate="%{text:,}", textposition="outside", marker_line_width=0)
+            fig.update_layout(coloraxis_showscale=False)
+            fig = style_plotly_dark(fig, height=max(340, 24 * len(genre_totals)))
+            render_chart_card("电影类型分布", "各类型电影数量（可重复计算多类型电影）", fig)
+
+        chart_row2 = st.columns(2)
+        with chart_row2[0]:
+            rating_counts_per_user = ratings.groupby("user_id")["rating"].count()
+            activity_bins = pd.cut(
+                rating_counts_per_user,
+                bins=[0, 20, 50, 100, 200, 500, float("inf")],
+                labels=["1-20", "21-50", "51-100", "101-200", "201-500", "500+"],
+            )
+            activity_counts = activity_bins.value_counts().sort_index()
+            fig = px.bar(
+                x=activity_counts.index.astype(str),
+                y=activity_counts.values,
+                color=activity_counts.values,
+                color_continuous_scale=["#0a3d2e", "#00c853", "#00e676"],
+                labels={"x": "评分数量区间", "y": "用户数"},
+                text=activity_counts.values,
+            )
+            fig.update_traces(texttemplate="%{text:,}", textposition="outside", marker_line_width=0)
+            fig.update_layout(coloraxis_showscale=False)
+            fig = style_plotly_dark(fig)
+            render_chart_card("用户活跃度分布", "按用户评分数量划分的活跃区间人数分布", fig)
+
+        with chart_row2[1]:
+            release_years = pd.to_numeric(catalog["Release Year"], errors="coerce").dropna()
+            decade_counts = (
+                (release_years // 10 * 10).astype(int).value_counts().sort_index()
+            )
+            fig = go.Figure(
+                go.Scatter(
+                    x=[f"{d}s" for d in decade_counts.index],
+                    y=decade_counts.values,
+                    mode="lines+markers",
+                    line=dict(color="#00e676", width=3, shape="spline"),
+                    marker=dict(color="#00c853", size=7, line=dict(color="#0f1216", width=1)),
+                    fill="tozeroy",
+                    fillcolor="rgba(0, 230, 118, 0.12)",
+                )
+            )
+            fig = style_plotly_dark(fig)
+            render_chart_card("上映年代分布", "电影按上映年代（10年为一组）的数量趋势", fig)
+
+        st.markdown('<div class="section-title">热门电影 Top 10</div>', unsafe_allow_html=True)
+        ranking = popular_movies(catalog, "Weighted Score", 10).reset_index(drop=True)
+        top10_table = pd.DataFrame(
+            {
+                "排名": [rank_badge_html(idx + 1) for idx in range(len(ranking))],
+                "电影ID": ranking["Movie ID"],
+                "中文片名": ranking["Title"].map(get_display_title),
+                "类型": ranking["Genres"].map(translate_genres),
+                "平均评分": ranking["Average Rating"].map(admin_rating_badge_html),
+                "评分数": ranking["Ratings"],
+                "上映年份": ranking["Release Year"],
+                "加权得分": ranking["Weighted Score"].map(lambda v: f"{v:.3f}"),
             }
-            st.bar_chart(pd.Series(genre_totals).sort_values(ascending=False))
-
-        st.markdown("**热门电影 Top10**")
-        st.dataframe(
-            translate_columns(popular_movies(catalog, "Weighted Score", 10)),
-            use_container_width=True,
-            hide_index=True,
         )
-
-        st.markdown("**用户活跃度分布**")
-        rating_counts_per_user = ratings.groupby("user_id")["rating"].count()
-        activity_bins = pd.cut(
-            rating_counts_per_user,
-            bins=[0, 20, 50, 100, 200, 500, float("inf")],
-            labels=["1-20", "21-50", "51-100", "101-200", "201-500", "500+"],
-        )
-        st.bar_chart(activity_bins.value_counts().sort_index())
+        render_admin_table(top10_table, html_columns={"排名", "平均评分"})
 
 
 def main() -> None:

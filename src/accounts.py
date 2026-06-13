@@ -234,6 +234,19 @@ def save_preferences(
         conn.close()
 
 
+def list_preferences(db_path: Path | str = DB_PATH) -> pd.DataFrame:
+    """Return all stored genre preferences as a DataFrame with `account_id`, `genres` (list)."""
+    conn = get_connection(db_path)
+    try:
+        rows = conn.execute("SELECT account_id, genres FROM user_preferences").fetchall()
+    finally:
+        conn.close()
+    return pd.DataFrame(
+        [{"account_id": int(row["account_id"]), "genres": json.loads(row["genres"])} for row in rows],
+        columns=["account_id", "genres"],
+    )
+
+
 def get_preferences(account_id: int, db_path: Path | str = DB_PATH) -> dict | None:
     conn = get_connection(db_path)
     try:
