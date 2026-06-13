@@ -1601,6 +1601,207 @@ def inject_theme() -> None:
             color: #00e676;
         }
 
+        /* 偏好类型分析：summary cards */
+        .pref-summary-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 0.9rem;
+            margin: 0.8rem 0 1.2rem;
+        }
+
+        .pref-summary-card {
+            background: rgba(15, 23, 42, 0.78);
+            border: 1px solid rgba(148, 163, 184, 0.16);
+            border-radius: 18px;
+            padding: 1rem 1.2rem;
+            box-shadow: 0 18px 44px rgba(0, 0, 0, 0.28);
+        }
+
+        .pref-summary-label {
+            color: var(--cloud);
+            font-size: 0.78rem;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+        }
+
+        .pref-summary-value {
+            color: #ffffff;
+            font-weight: 900;
+            font-size: 1.4rem;
+            margin-top: 0.3rem;
+        }
+
+        .pref-summary-extra {
+            color: #00e676;
+            font-size: 0.85rem;
+            font-weight: 800;
+            margin-top: 0.15rem;
+        }
+
+        .pref-summary-note {
+            color: #facc15;
+            font-size: 0.72rem;
+            margin-top: 0.4rem;
+        }
+
+        /* 偏好类型分析：dark styled table */
+        .preference-table-wrap {
+            background: rgba(15, 23, 42, 0.78);
+            border: 1px solid rgba(148, 163, 184, 0.16);
+            border-radius: 22px;
+            padding: 18px;
+            box-shadow: 0 18px 44px rgba(0, 0, 0, 0.28);
+            overflow-x: auto;
+            margin-bottom: 1.2rem;
+        }
+
+        .preference-table {
+            width: 100%;
+            border-collapse: collapse;
+            color: #cbd5e1;
+            font-size: 0.92rem;
+        }
+
+        .preference-table thead tr {
+            background: rgba(0, 200, 83, 0.16);
+        }
+
+        .preference-table th {
+            padding: 0.85rem 1rem;
+            color: #00e676;
+            font-weight: 900;
+            text-align: left;
+            border-bottom: 1px solid rgba(148, 163, 184, 0.18);
+            white-space: nowrap;
+        }
+
+        .preference-table td {
+            padding: 0.78rem 1rem;
+            border-bottom: 1px solid rgba(148, 163, 184, 0.10);
+            white-space: nowrap;
+        }
+
+        .preference-table tbody tr:hover {
+            background: rgba(0, 230, 118, 0.08);
+        }
+
+        .preference-table .empty-row td {
+            text-align: center;
+            color: var(--cloud);
+            padding: 1.2rem;
+            white-space: normal;
+        }
+
+        .preference-high { color: #00e676; font-weight: 900; }
+        .preference-medium { color: #38bdf8; font-weight: 800; }
+        .preference-low { color: #94a3b8; font-weight: 700; }
+
+        /* 通用空状态卡片 */
+        .empty-state-card {
+            background: rgba(15, 23, 42, 0.78);
+            border: 1px solid rgba(148, 163, 184, 0.16);
+            border-radius: 18px;
+            padding: 1.4rem 1.6rem;
+            color: var(--cloud);
+            font-size: 0.92rem;
+            text-align: center;
+            box-shadow: 0 18px 44px rgba(0, 0, 0, 0.28);
+        }
+
+        /* 数据可视化分析页 */
+        .viz-page-header {
+            margin: 0.4rem 0 1.4rem;
+        }
+
+        .viz-page-title {
+            color: #ffffff;
+            font-size: 1.9rem;
+            font-weight: 900;
+            letter-spacing: 0.01em;
+            display: inline-block;
+            padding-bottom: 0.4rem;
+            border-bottom: 3px solid rgba(0, 230, 118, 0.65);
+            box-shadow: 0 6px 18px -10px rgba(0, 230, 118, 0.9);
+        }
+
+        .viz-page-subtitle {
+            color: #94a3b8;
+            font-size: 0.92rem;
+            margin-top: 0.6rem;
+            line-height: 1.6;
+            max-width: 880px;
+        }
+
+        .viz-metric-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 0.9rem;
+            margin: 0.4rem 0 1.4rem;
+        }
+
+        .viz-metric-card {
+            background: rgba(15, 23, 42, 0.78);
+            border: 1px solid rgba(0, 230, 118, 0.18);
+            border-radius: 20px;
+            padding: 22px;
+            box-shadow: 0 14px 34px rgba(0, 0, 0, 0.22);
+        }
+
+        .viz-metric-value {
+            color: #00e676;
+            font-size: 34px;
+            font-weight: 900;
+            line-height: 1.2;
+        }
+
+        .viz-metric-label {
+            color: #94a3b8;
+            font-size: 14px;
+            font-weight: 700;
+            margin-top: 0.3rem;
+        }
+
+        .viz-chart-card {
+            background: rgba(15, 23, 42, 0.78);
+            border: 1px solid rgba(148, 163, 184, 0.16);
+            border-radius: 22px;
+            padding: 22px;
+            box-shadow: 0 18px 44px rgba(0, 0, 0, 0.28);
+            margin-bottom: 24px;
+        }
+
+        .viz-card-title {
+            font-size: 20px;
+            font-weight: 900;
+            color: #ffffff;
+            margin-bottom: 8px;
+        }
+
+        .viz-card-subtitle {
+            font-size: 14px;
+            color: #94a3b8;
+            margin-bottom: 18px;
+        }
+
+        .viz-insight-card {
+            background: rgba(15, 23, 42, 0.78);
+            border: 1px solid rgba(148, 163, 184, 0.16);
+            border-left: 4px solid #00e676;
+            border-radius: 14px;
+            padding: 18px 22px;
+            color: #cbd5e1;
+            font-size: 0.92rem;
+            line-height: 1.7;
+            margin-bottom: 24px;
+        }
+
+        .viz-insight-title {
+            font-size: 1.05rem;
+            font-weight: 900;
+            color: #ffffff;
+            margin-bottom: 0.5rem;
+        }
+
         .recommend-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
@@ -2671,7 +2872,7 @@ def render_header() -> None:
     )
 
 
-LANDING_HERO_IMAGE_PATH = PROJECT_ROOT / "电影照片" / "欢迎页.jpg"
+LANDING_HERO_IMAGE_PATH = PROJECT_ROOT / "电影照片" / "欢迎页.png"
 
 
 @st.cache_data(show_spinner=False)
@@ -3018,6 +3219,25 @@ def rank_badge_html(rank: int) -> str:
     tier = f"top{rank}" if rank <= 3 else ""
     css_class = f"rank-badge {tier}".strip()
     return f'<span class="{css_class}">TOP {rank}</span>'
+
+
+def preference_rating_badge_html(value: float) -> str:
+    """Return a `.rating-badge` span showing a two-decimal star rating, e.g. "⭐ 4.50"."""
+    if value is None or (isinstance(value, float) and pd.isna(value)):
+        return '<span class="rating-badge">暂无</span>'
+    return f'<span class="rating-badge">⭐ {float(value):.2f}</span>'
+
+
+def preference_strength_html(value: float) -> str:
+    """Return a `.preference-high/medium/low` span classifying an average rating."""
+    if value is None or (isinstance(value, float) and pd.isna(value)):
+        return '<span class="preference-low">暂无</span>'
+    value = float(value)
+    if value >= 4.2:
+        return '<span class="preference-high">高偏好</span>'
+    if value >= 3.5:
+        return '<span class="preference-medium">中偏好</span>'
+    return '<span class="preference-low">低偏好</span>'
 
 
 def render_capability_cards() -> None:
@@ -3877,8 +4097,104 @@ def render_catalog_page(
         render_dark_table(display_history, table_class="user-dark-table", card_class="user-table-card", html_columns={"用户评分"})
 
         genre_pref = user_genre_preferences(ratings, movies, user_id)
-        st.markdown('<div class="section-title">偏好分析</div>', unsafe_allow_html=True)
-        st.dataframe(translate_columns(genre_pref), use_container_width=True, hide_index=True)
+        st.markdown('<div class="section-title">偏好类型分析</div>', unsafe_allow_html=True)
+        st.markdown(
+            '<div class="admin-subtitle">根据你的历史评分记录统计各电影类型的评分数量与平均评分，'
+            "帮助分析你的真实观影偏好。</div>",
+            unsafe_allow_html=True,
+        )
+
+        if genre_pref.empty:
+            render_html_block(
+                '<div class="empty-state-card">你还没有足够的评分记录，完成更多电影评分后，'
+                "系统将生成你的类型偏好分析。</div>"
+            )
+        else:
+            ranked_pref = genre_pref.reset_index(drop=True)
+
+            # 最偏好类型：优先选择样本数 >= 3 的类型中平均分最高者，避免单条评分造成的极端值。
+            confident_pref = ranked_pref[ranked_pref["Rated Movies"] >= 3]
+            top_pref_pool = confident_pref if not confident_pref.empty else ranked_pref
+            top_pref_row = top_pref_pool.sort_values(
+                ["Average Rating", "Rated Movies"], ascending=False
+            ).iloc[0]
+            top_pref_low_sample = int(top_pref_row["Rated Movies"]) <= 2
+
+            # 最常评分类型：评分数量最多的类型。
+            most_rated_row = ranked_pref.sort_values(
+                ["Rated Movies", "Average Rating"], ascending=False
+            ).iloc[0]
+
+            # 高分类型数量：平均评分 >= 4.0 的类型个数。
+            high_score_count = int((ranked_pref["Average Rating"] >= 4.0).sum())
+
+            top_pref_note = (
+                '<div class="pref-summary-note">样本较少，仅供参考</div>' if top_pref_low_sample else ""
+            )
+            summary_cards = f"""
+                <div class="pref-summary-grid">
+                    <div class="pref-summary-card">
+                        <div class="pref-summary-label">最偏好类型</div>
+                        <div class="pref-summary-value">{html.escape(GENRE_ZH.get(top_pref_row['Genre'], top_pref_row['Genre']))}</div>
+                        <div class="pref-summary-extra">⭐ {float(top_pref_row['Average Rating']):.2f}</div>
+                        {top_pref_note}
+                    </div>
+                    <div class="pref-summary-card">
+                        <div class="pref-summary-label">最常评分类型</div>
+                        <div class="pref-summary-value">{html.escape(GENRE_ZH.get(most_rated_row['Genre'], most_rated_row['Genre']))}</div>
+                        <div class="pref-summary-extra">{int(most_rated_row['Rated Movies']):,} 部</div>
+                    </div>
+                    <div class="pref-summary-card">
+                        <div class="pref-summary-label">高分类型数量</div>
+                        <div class="pref-summary-value">{high_score_count}</div>
+                        <div class="pref-summary-extra">平均评分 ≥ 4.0</div>
+                    </div>
+                </div>
+                """
+            render_html_block(summary_cards)
+
+            chart_df = ranked_pref.copy()
+            chart_df["类型"] = chart_df["Genre"].map(lambda g: GENRE_ZH.get(g, g))
+            chart_df = chart_df.sort_values("Average Rating", ascending=True)
+            pref_fig = px.bar(
+                chart_df,
+                x="Average Rating",
+                y="类型",
+                orientation="h",
+                color="Average Rating",
+                color_continuous_scale="Greens",
+                hover_data={"Rated Movies": True, "Average Rating": ":.2f"},
+                labels={"Average Rating": "平均评分", "Rated Movies": "已评分电影数"},
+                title="各类型平均评分与评分数量",
+            )
+            pref_fig.update_traces(
+                hovertemplate="类型：%{y}<br>平均评分：%{x:.2f}<br>已评分电影数：%{customdata[0]}<extra></extra>"
+            )
+            pref_fig = style_plotly_dark(pref_fig, height=max(320, 42 * len(chart_df)))
+            pref_fig.update_layout(
+                margin=dict(l=40, r=30, t=60, b=40),
+                title_font=dict(color="#ffffff", size=18),
+            )
+            st.plotly_chart(pref_fig, use_container_width=True)
+
+            display_pref = pd.DataFrame(
+                {
+                    "排名": [rank_badge_html(idx + 1) for idx in range(len(ranked_pref))],
+                    "类型": ranked_pref["Genre"].map(lambda g: GENRE_ZH.get(g, g)),
+                    "已评分电影数": ranked_pref["Rated Movies"],
+                    "平均评分": ranked_pref["Average Rating"].map(preference_rating_badge_html),
+                    "偏好强度": ranked_pref["Average Rating"].map(preference_strength_html),
+                }
+            )
+            render_dark_table(
+                display_pref,
+                table_class="preference-table",
+                card_class="preference-table-wrap",
+                html_columns={"排名", "平均评分", "偏好强度"},
+            )
+
+            if (ranked_pref["Rated Movies"] <= 2).any():
+                st.caption("评分数量较少的类型仅作为参考。")
 
     with catalog_tabs[3]:
         st.markdown('<div class="section-title">热门电影排行</div>', unsafe_allow_html=True)
@@ -3927,31 +4243,266 @@ def render_catalog_page(
         )
 
     with catalog_tabs[4]:
-        st.markdown('<div class="section-title">结果可视化</div>', unsafe_allow_html=True)
-        chart_cols = st.columns(3)
-        with chart_cols[0]:
-            st.caption("评分分布")
-            st.bar_chart(ratings["rating"].value_counts().sort_index())
-        with chart_cols[1]:
-            st.caption("用户评分行为")
-            user_history = ratings.loc[ratings["user_id"] == user_id].copy()
-            user_history["date"] = pd.to_datetime(user_history["timestamp"], unit="s").dt.date
-            st.line_chart(user_history.groupby("date")["rating"].count())
-        with chart_cols[2]:
-            st.caption("推荐结果类型分布")
-            chart_recs, _ = safe_personalized_recommendations(
-                ratings,
-                movies,
-                avg_ratings,
-                rating_counts,
-                user_id,
-                "Item-based Collaborative Filtering",
-                10,
-                20,
-                "cosine",
-                50,
+        render_html_block(
+            """
+            <div class="viz-page-header">
+                <div class="viz-page-title">数据可视化分析</div>
+                <div class="viz-page-subtitle">
+                    基于 MovieLens 100K 评分数据、电影类型与推荐结果生成的可视化分析，
+                    帮助理解用户行为与推荐结果分布。
+                </div>
+            </div>
+            """
+        )
+
+        user_history = ratings.loc[ratings["user_id"] == user_id].copy()
+        chart_recs, _ = safe_personalized_recommendations(
+            ratings,
+            movies,
+            avg_ratings,
+            rating_counts,
+            user_id,
+            "Item-based Collaborative Filtering",
+            10,
+            20,
+            "cosine",
+            50,
+        )
+        rec_genre_counts = recommendation_genre_counts(chart_recs)
+        used_fallback_genres = False
+        if rec_genre_counts.empty:
+            rec_genre_counts = recommendation_genre_counts(popular_movies(catalog, "Weighted Score", 50))
+            used_fallback_genres = True
+
+        my_rating_count = len(user_history)
+        my_avg_rating = f"{user_history['rating'].mean():.2f}" if my_rating_count else "暂无"
+        rec_count = len(chart_recs)
+        genre_coverage = int((rec_genre_counts > 0).sum())
+
+        render_html_block(
+            f"""
+            <div class="viz-metric-grid">
+                <div class="viz-metric-card">
+                    <div class="viz-metric-value">{my_rating_count}</div>
+                    <div class="viz-metric-label">我的评分数</div>
+                </div>
+                <div class="viz-metric-card">
+                    <div class="viz-metric-value">{my_avg_rating}</div>
+                    <div class="viz-metric-label">我的平均评分</div>
+                </div>
+                <div class="viz-metric-card">
+                    <div class="viz-metric-value">{rec_count}</div>
+                    <div class="viz-metric-label">推荐电影数</div>
+                </div>
+                <div class="viz-metric-card">
+                    <div class="viz-metric-value">{genre_coverage}</div>
+                    <div class="viz-metric-label">覆盖类型数</div>
+                </div>
+            </div>
+            """
+        )
+
+        viz_row1 = st.columns(2)
+
+        with viz_row1[0]:
+            rating_dist = ratings["rating"].value_counts().sort_index()
+            if rating_dist.empty:
+                render_html_block(
+                    """
+                    <div class="viz-chart-card">
+                        <div class="viz-card-title">评分分布</div>
+                        <div class="empty-state-card">当前数据不足，完成更多评分或推荐后可生成更完整的可视化分析。</div>
+                    </div>
+                    """
+                )
+            else:
+                dist_df = pd.DataFrame(
+                    {"评分值": rating_dist.index.astype(str), "评分数量": rating_dist.values}
+                )
+                fig_dist = px.bar(
+                    dist_df,
+                    x="评分值",
+                    y="评分数量",
+                    color="评分数量",
+                    color_continuous_scale=["#0f3d2e", "#00e676"],
+                )
+                fig_dist.update_traces(
+                    hovertemplate="评分值：%{x}<br>评分数量：%{y:,}<extra></extra>",
+                    marker_line_width=0,
+                )
+                fig_dist.update_coloraxes(showscale=False)
+                fig_dist = style_plotly_dark(fig_dist, height=360)
+                fig_dist.update_layout(
+                    title="评分分布",
+                    template="plotly_dark",
+                    paper_bgcolor="rgba(0,0,0,0)",
+                    plot_bgcolor="rgba(15,23,42,0.65)",
+                    font=dict(color="#cbd5e1"),
+                    title_font=dict(color="#ffffff", size=18),
+                    margin=dict(l=40, r=30, t=60, b=40),
+                    legend=dict(bgcolor="rgba(0,0,0,0)"),
+                    xaxis_title="评分值",
+                    yaxis_title="评分数量",
+                )
+                render_html_block(
+                    """
+                    <div class="viz-chart-card">
+                        <div class="viz-card-title">评分分布</div>
+                        <div class="viz-card-subtitle">全部用户在 MovieLens 100K 数据集上的评分取值分布。</div>
+                    </div>
+                    """
+                )
+                st.plotly_chart(fig_dist, use_container_width=True, config={"displayModeBar": False})
+
+        with viz_row1[1]:
+            if user_history.empty:
+                render_html_block(
+                    """
+                    <div class="viz-chart-card">
+                        <div class="viz-card-title">我的评分行为</div>
+                        <div class="empty-state-card">当前数据不足，完成更多评分或推荐后可生成更完整的可视化分析。</div>
+                    </div>
+                    """
+                )
+            else:
+                user_history["date"] = pd.to_datetime(user_history["timestamp"], unit="s")
+                user_history["月份"] = user_history["date"].dt.to_period("M").astype(str)
+                monthly = (
+                    user_history.groupby("月份")["rating"].count().reset_index(name="评分数量")
+                )
+                if len(monthly) >= 3:
+                    fig_behavior = px.line(
+                        monthly,
+                        x="月份",
+                        y="评分数量",
+                        markers=True,
+                    )
+                    fig_behavior.update_traces(
+                        line_color="#00e676",
+                        marker=dict(color="#00e676", size=8),
+                        hovertemplate="月份：%{x}<br>评分数量：%{y:,}<extra></extra>",
+                    )
+                    behavior_title = "我的评分行为趋势"
+                    behavior_subtitle = "按月统计的我的评分活动次数。"
+                else:
+                    score_dist = user_history["rating"].value_counts().sort_index()
+                    score_df = pd.DataFrame(
+                        {"评分值": score_dist.index.astype(str), "评分数量": score_dist.values}
+                    )
+                    fig_behavior = px.bar(
+                        score_df,
+                        x="评分值",
+                        y="评分数量",
+                        color="评分数量",
+                        color_continuous_scale=["#163a52", "#38bdf8"],
+                    )
+                    fig_behavior.update_traces(
+                        hovertemplate="评分值：%{x}<br>评分数量：%{y:,}<extra></extra>",
+                        marker_line_width=0,
+                    )
+                    fig_behavior.update_coloraxes(showscale=False)
+                    behavior_title = "我的评分分布"
+                    behavior_subtitle = "我给出的评分（1-5 星）次数分布。"
+
+                fig_behavior = style_plotly_dark(fig_behavior, height=360)
+                fig_behavior.update_layout(
+                    title=behavior_title,
+                    template="plotly_dark",
+                    paper_bgcolor="rgba(0,0,0,0)",
+                    plot_bgcolor="rgba(15,23,42,0.65)",
+                    font=dict(color="#cbd5e1"),
+                    title_font=dict(color="#ffffff", size=18),
+                    margin=dict(l=40, r=30, t=60, b=40),
+                    legend=dict(bgcolor="rgba(0,0,0,0)"),
+                )
+                render_html_block(
+                    f"""
+                    <div class="viz-chart-card">
+                        <div class="viz-card-title">{html.escape(behavior_title)}</div>
+                        <div class="viz-card-subtitle">{html.escape(behavior_subtitle)}</div>
+                    </div>
+                    """
+                )
+                st.plotly_chart(fig_behavior, use_container_width=True, config={"displayModeBar": False})
+
+        if rec_genre_counts.empty:
+            render_html_block(
+                """
+                <div class="viz-chart-card">
+                    <div class="viz-card-title">推荐结果类型分布</div>
+                    <div class="empty-state-card">当前数据不足，完成更多评分或推荐后可生成更完整的可视化分析。</div>
+                </div>
+                """
             )
-            st.bar_chart(recommendation_genre_counts(chart_recs))
+        else:
+            top_genres = rec_genre_counts.head(10).sort_values(ascending=True)
+            genre_df = pd.DataFrame({"类型": top_genres.index, "数量": top_genres.values})
+            fig_genre = px.bar(
+                genre_df,
+                x="数量",
+                y="类型",
+                orientation="h",
+                color="数量",
+                color_continuous_scale=["#0f3d2e", "#00e676"],
+            )
+            fig_genre.update_traces(
+                hovertemplate="类型：%{y}<br>数量：%{x:,}<extra></extra>",
+                marker_line_width=0,
+            )
+            fig_genre.update_coloraxes(showscale=False)
+            genre_title = "热门电影类型分布" if used_fallback_genres else "推荐结果类型分布"
+            genre_subtitle = (
+                "当前推荐结果为空，以全站热门电影的类型分布作为参考。"
+                if used_fallback_genres
+                else "根据为你生成的推荐结果统计的电影类型分布（取前 10 项）。"
+            )
+            fig_genre = style_plotly_dark(fig_genre, height=max(320, 36 * len(genre_df)))
+            fig_genre.update_layout(
+                title=genre_title,
+                template="plotly_dark",
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(15,23,42,0.65)",
+                font=dict(color="#cbd5e1"),
+                title_font=dict(color="#ffffff", size=18),
+                margin=dict(l=40, r=30, t=60, b=40),
+                legend=dict(bgcolor="rgba(0,0,0,0)"),
+            )
+            render_html_block(
+                f"""
+                <div class="viz-chart-card">
+                    <div class="viz-card-title">{html.escape(genre_title)}</div>
+                    <div class="viz-card-subtitle">{html.escape(genre_subtitle)}</div>
+                </div>
+                """
+            )
+            st.plotly_chart(fig_genre, use_container_width=True, config={"displayModeBar": False})
+
+        if rec_genre_counts.empty:
+            insight_text = "当前数据不足，完成更多评分或推荐后可生成更完整的可视化分析。"
+        else:
+            top3 = rec_genre_counts.head(3).index.tolist()
+            top1 = top3[0]
+            source_text = "热门电影" if used_fallback_genres else "推荐结果"
+            if len(top3) >= 2:
+                others = "、".join(top3[1:])
+                insight_text = (
+                    f"从{source_text}来看，系统更倾向于为你推荐{top1}、{others}等类型电影，"
+                    f"其中{top1}类电影占比最高，说明你的评分历史和偏好类型与该类电影具有较高匹配度。"
+                )
+            else:
+                insight_text = (
+                    f"从{source_text}来看，系统更倾向于为你推荐{top1}类电影，"
+                    f"说明你的评分历史和偏好类型与该类电影具有较高匹配度。"
+                )
+
+        render_html_block(
+            f"""
+            <div class="viz-insight-card">
+                <div class="viz-insight-title">推荐结果解读</div>
+                <div>{html.escape(insight_text)}</div>
+            </div>
+            """
+        )
 
     with catalog_tabs[5]:
         account = st.session_state.get("account")
