@@ -1,0 +1,27 @@
+# FilmTrace / MovieLens 100K project configuration.
+# Mirrors the defaults in src/config.py; load with src.config.load_config().
+
+reproducibility:
+  random_state: 42
+
+split:
+  test_size: 0.2
+
+collaborative_filtering:
+  k_neighbors: 20
+  min_common_ratings: 5
+  similarity_metric: cosine   # "cosine" or "pearson"
+
+svd:
+  n_components: 50
+  n_iter: 5
+
+neural_cf:
+  embedding_dim: 32
+  hidden_dims: [64, 32]
+  epochs: 20
+  batch_size: 512
+  learning_rate: 0.001
+  weight_decay: 0.00001
+
+rating_scale: [1, 5]

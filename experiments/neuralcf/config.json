@@ -1,0 +1,14 @@
+{
+  "model": "NeuralCF",
+  "embedding_dim": 32,
+  "hidden_dims": [
+    64,
+    32
+  ],
+  "epochs": 20,
+  "batch_size": 512,
+  "learning_rate": 0.001,
+  "weight_decay": 1e-05,
+  "random_state": 42,
+  "device": "cpu"
+}

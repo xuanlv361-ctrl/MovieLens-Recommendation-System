@@ -11,6 +11,8 @@ dependencies:
   - seaborn>=0.13,<1
   - jupyter>=1.0,<2
   - jupyterlab>=4.0,<5
+  - tqdm>=4.65,<5
+  - pyyaml>=6.0,<7
   - streamlit>=1.28,<2
   - nbconvert>=7.0,<8
   - pip

@@ -29,3 +29,20 @@ MOVIES_FILE = DATA_RAW / "u.item"
 GENRE_FILE = DATA_RAW / "u.genre"
 
 RATING_SCALE = (1, 5)
+
+# YAML configuration file (shares the same defaults as the constants above).
+CONFIG_FILE = PROJECT_ROOT / "configs" / "config.yaml"
+
+
+def load_config(path=None):
+    """Load project configuration from a YAML file.
+
+    Returns a nested dict (reproducibility/split/collaborative_filtering/svd/neural_cf/
+    rating_scale). The Python constants above stay the importable defaults; this loader
+    lets scripts and notebooks read the same hyperparameters from configs/config.yaml.
+    """
+    import yaml
+
+    cfg_path = Path(path) if path is not None else CONFIG_FILE
+    with open(cfg_path, encoding="utf-8") as handle:
+        return yaml.safe_load(handle)

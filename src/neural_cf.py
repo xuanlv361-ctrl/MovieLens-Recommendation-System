@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
+from abc import ABC, abstractmethod
+
 import numpy as np
 import pandas as pd
 
 from .config import RANDOM_STATE, RATING_SCALE
 from .metrics import clip_predictions
 from .preprocessing import global_mean
+from .reproducibility import ExperimentLogger, set_seed
+from .trainer import NCFTrainer
 
 try:
     import torch
@@ -20,7 +24,16 @@ except ImportError:  # pragma: no cover - optional dependency
     TensorDataset = None
 
 
-class _NCFNetwork(nn.Module):
+class _BaseNCFModule(nn.Module, ABC):
+    """Abstract base for NeuralCF network modules (per the project code standard)."""
+
+    @abstractmethod
+    def forward(self, user_idx: torch.Tensor, item_idx: torch.Tensor) -> torch.Tensor:
+        """Run the forward pass and return predicted ratings."""
+        raise NotImplementedError
+
+
+class _NCFNetwork(_BaseNCFModule):
     def __init__(
         self,
         n_users: int,
@@ -63,6 +76,7 @@ class NeuralCFRecommender:
         weight_decay: float = 1e-5,
         random_state: int = RANDOM_STATE,
         device: str | None = None,
+        show_progress: bool = False,
     ) -> None:
         if torch is None:
             raise ImportError("PyTorch is required for NeuralCFRecommender.")
@@ -73,6 +87,7 @@ class NeuralCFRecommender:
         self.learning_rate = learning_rate
         self.weight_decay = weight_decay
         self.random_state = random_state
+        self.show_progress = show_progress
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
 
         self.model_: _NCFNetwork | None = None
@@ -81,10 +96,13 @@ class NeuralCFRecommender:
         self.global_mean_: float = 0.0
         self.history_: list[float] = []
 
-    def fit(self, train: pd.DataFrame) -> NeuralCFRecommender:
-        """Train the NeuralCF network on the training ratings and return self."""
-        torch.manual_seed(self.random_state)
-        np.random.seed(self.random_state)
+    def fit(self, train: pd.DataFrame, experiment_dir: str | None = None) -> NeuralCFRecommender:
+        """Train the NeuralCF network on the training ratings and return self.
+
+        If ``experiment_dir`` is given, an ExperimentLogger records the run config and
+        per-epoch training loss to ``metrics.json`` / ``config.json`` in that directory.
+        """
+        set_seed(self.random_state)
         self.global_mean_ = global_mean(train)
 
         user_ids = sorted(train["user_id"].unique())
@@ -127,23 +145,35 @@ class NeuralCFRecommender:
             weight_decay=self.weight_decay,
         )
         loss_fn = nn.MSELoss()
-        self.history_ = []
 
-        self.model_.train()
-        for _ in range(self.epochs):
-            epoch_losses = []
-            for users, items, ratings in loader:
-                users = users.to(self.device)
-                items = items.to(self.device)
-                ratings = ratings.to(self.device)
+        experiment_logger = None
+        if experiment_dir is not None:
+            experiment_logger = ExperimentLogger(experiment_dir)
+            experiment_logger.log_config(
+                {
+                    "model": "NeuralCF",
+                    "embedding_dim": self.embedding_dim,
+                    "hidden_dims": list(self.hidden_dims),
+                    "epochs": self.epochs,
+                    "batch_size": self.batch_size,
+                    "learning_rate": self.learning_rate,
+                    "weight_decay": self.weight_decay,
+                    "random_state": self.random_state,
+                    "device": self.device,
+                }
+            )
 
-                optimizer.zero_grad()
-                preds = self.model_(users, items)
-                loss = loss_fn(preds, ratings)
-                loss.backward()
-                optimizer.step()
-                epoch_losses.append(float(loss.detach().cpu()))
-            self.history_.append(float(np.mean(epoch_losses)))
+        trainer = NCFTrainer(
+            model=self.model_,
+            train_loader=loader,
+            criterion=loss_fn,
+            optimizer=optimizer,
+            device=self.device,
+            epochs=self.epochs,
+            show_progress=self.show_progress,
+            experiment_logger=experiment_logger,
+        )
+        self.history_ = trainer.train()
         return self
 
     def predict(self, user_id: int, movie_id: int) -> float:
@@ -190,3 +220,59 @@ class NeuralCFRecommender:
             model_preds = self.model_(users, items).detach().cpu().numpy()
         preds[np.array(known_positions)] = model_preds
         return clip_predictions(preds, *RATING_SCALE)
+
+    def save(self, path: str) -> None:
+        """Save model weights, index mappings, and config to a checkpoint file."""
+        if self.model_ is None:
+            raise RuntimeError("Call fit() before save().")
+        torch.save(
+            {
+                "model_state_dict": self.model_.state_dict(),
+                "user_idx": self.user_idx_,
+                "item_idx": self.item_idx_,
+                "global_mean": self.global_mean_,
+                "history": self.history_,
+                "config": {
+                    "embedding_dim": self.embedding_dim,
+                    "hidden_dims": list(self.hidden_dims),
+                    "epochs": self.epochs,
+                    "batch_size": self.batch_size,
+                    "learning_rate": self.learning_rate,
+                    "weight_decay": self.weight_decay,
+                    "random_state": self.random_state,
+                },
+            },
+            path,
+        )
+
+    @classmethod
+    def load(cls, path: str, device: str | None = None) -> NeuralCFRecommender:
+        """Load a NeuralCFRecommender from a checkpoint file saved by save()."""
+        if torch is None:
+            raise ImportError("PyTorch is required for NeuralCFRecommender.")
+        checkpoint = torch.load(path, map_location=device or "cpu", weights_only=False)
+        cfg = checkpoint["config"]
+        model = cls(
+            embedding_dim=cfg["embedding_dim"],
+            hidden_dims=tuple(cfg["hidden_dims"]),
+            epochs=cfg["epochs"],
+            batch_size=cfg["batch_size"],
+            learning_rate=cfg["learning_rate"],
+            weight_decay=cfg["weight_decay"],
+            random_state=cfg["random_state"],
+            device=device,
+        )
+        model.user_idx_ = {int(k): int(v) for k, v in checkpoint["user_idx"].items()}
+        model.item_idx_ = {int(k): int(v) for k, v in checkpoint["item_idx"].items()}
+        model.global_mean_ = float(checkpoint["global_mean"])
+        model.history_ = list(checkpoint.get("history", []))
+        network = _NCFNetwork(
+            n_users=len(model.user_idx_),
+            n_items=len(model.item_idx_),
+            embedding_dim=model.embedding_dim,
+            hidden_dims=model.hidden_dims,
+        ).to(model.device)
+        network.load_state_dict(checkpoint["model_state_dict"])
+        network.eval()
+        model.model_ = network
+        return model

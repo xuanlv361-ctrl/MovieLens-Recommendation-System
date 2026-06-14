@@ -13,3 +13,5 @@ python-dotenv>=1.0,<2
 requests>=2.31,<3
 plotly>=5.18,<6
 torch>=2.0,<3
+tqdm>=4.65,<5
+PyYAML>=6.0,<7
