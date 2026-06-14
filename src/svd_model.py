@@ -41,6 +41,7 @@ class SVDRecommender:
         self._baseline: BiasBaseline | None = None
 
     def fit(self, train: pd.DataFrame) -> SVDRecommender:
+        """Fit the model on the training ratings and return self."""
         self._global_mean = global_mean(train)
         self._baseline = BiasBaseline(n_epochs=20, reg=self.baseline_reg).fit(train)
 
@@ -81,6 +82,7 @@ class SVDRecommender:
         return self
 
     def predict(self, user_id: int, movie_id: int) -> float:
+        """Return the predicted rating for the given (user_id, movie_id)."""
         if self._svd is None or self._user_factors is None or self._baseline is None:
             raise RuntimeError("Call fit() before predict().")
 
@@ -95,6 +97,7 @@ class SVDRecommender:
         return float(clip_predictions(np.array([pred]), *RATING_SCALE)[0])
 
     def predict_batch(self, test: pd.DataFrame) -> np.ndarray:
+        """Return predicted ratings for every (user_id, movie_id) row in the input."""
         if self._svd is None or self._user_factors is None or self._baseline is None:
             raise RuntimeError("Call fit() before predict_batch().")
 

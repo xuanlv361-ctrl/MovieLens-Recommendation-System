@@ -6,12 +6,14 @@ import numpy as np
 
 
 def rmse(y_true: np.ndarray, y_pred: np.ndarray) -> float:
+    """Return the root-mean-squared error between true and predicted ratings."""
     y_true = np.asarray(y_true, dtype=float)
     y_pred = np.asarray(y_pred, dtype=float)
     return float(np.sqrt(np.mean((y_true - y_pred) ** 2)))
 
 
 def mae(y_true: np.ndarray, y_pred: np.ndarray) -> float:
+    """Return the mean absolute error between true and predicted ratings."""
     y_true = np.asarray(y_true, dtype=float)
     y_pred = np.asarray(y_pred, dtype=float)
     return float(np.mean(np.abs(y_true - y_pred)))
@@ -22,6 +24,7 @@ def clip_predictions(
     low: float = 1.0,
     high: float = 5.0,
 ) -> np.ndarray:
+    """Clip predicted ratings into the valid [low, high] rating range."""
     return np.clip(preds, low, high)
 
 

@@ -43,6 +43,7 @@ class MetadataHybridRegressor:
         self.pipeline_: Pipeline | None = None
 
     def fit(self, train: pd.DataFrame, movies: pd.DataFrame) -> MetadataHybridRegressor:
+        """Fit the model on the training ratings and return self."""
         self.global_mean_ = float(train["rating"].mean())
         self.genre_cols_ = [col for col in movies.columns if col not in NON_GENRE_COLUMNS]
         self.user_features_ = self._build_user_features(train)
@@ -77,10 +78,12 @@ class MetadataHybridRegressor:
         return self
 
     def predict(self, user_id: int, movie_id: int) -> float:
+        """Return the predicted rating for the given (user_id, movie_id)."""
         frame = pd.DataFrame({"user_id": [user_id], "movie_id": [movie_id]})
         return float(self.predict_batch(frame)[0])
 
     def predict_batch(self, test: pd.DataFrame) -> np.ndarray:
+        """Return predicted ratings for every (user_id, movie_id) row in the input."""
         if self.pipeline_ is None:
             raise RuntimeError("Call fit() before predict_batch().")
         features = self._make_features(test)

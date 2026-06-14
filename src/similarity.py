@@ -19,6 +19,7 @@ def cosine_similarity_vectors(a: np.ndarray, b: np.ndarray) -> float:
 
 
 def pearson_similarity_vectors(a: np.ndarray, b: np.ndarray) -> float:
+    """Return the Pearson correlation similarity between two rating vectors."""
     mask = ~(np.isnan(a) | np.isnan(b))
     if mask.sum() < 2:
         return 0.0

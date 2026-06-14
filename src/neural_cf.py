@@ -43,6 +43,7 @@ class _NCFNetwork(nn.Module):
         self.mlp = nn.Sequential(*layers)
 
     def forward(self, user_idx: torch.Tensor, item_idx: torch.Tensor) -> torch.Tensor:
+        """Run the forward pass: embed user/item indices and return predicted ratings."""
         user_vec = self.user_embedding(user_idx)
         item_vec = self.item_embedding(item_idx)
         x = torch.cat([user_vec, item_vec], dim=1)
@@ -81,6 +82,7 @@ class NeuralCFRecommender:
         self.history_: list[float] = []
 
     def fit(self, train: pd.DataFrame) -> NeuralCFRecommender:
+        """Train the NeuralCF network on the training ratings and return self."""
         torch.manual_seed(self.random_state)
         np.random.seed(self.random_state)
         self.global_mean_ = global_mean(train)
@@ -145,10 +147,23 @@ class NeuralCFRecommender:
         return self
 
     def predict(self, user_id: int, movie_id: int) -> float:
+        """Return the predicted rating for one (user_id, movie_id) pair."""
         frame = pd.DataFrame({"user_id": [user_id], "movie_id": [movie_id]})
         return float(self.predict_batch(frame)[0])
 
+    def predict_for_user(self, user_id: int, movie_ids: list[int]) -> pd.Series:
+        """Vectorized prediction for one user over many candidate movies.
+
+        Returns a Series indexed by movie_id, matching the interface used by the
+        other recommenders so the Streamlit recommendation pipeline can score all
+        candidates in a single pass.
+        """
+        frame = pd.DataFrame({"user_id": user_id, "movie_id": list(movie_ids)})
+        preds = self.predict_batch(frame)
+        return pd.Series(preds, index=list(movie_ids), dtype=float)
+
     def predict_batch(self, test: pd.DataFrame) -> np.ndarray:
+        """Return predicted ratings for every (user_id, movie_id) row in the input."""
         if self.model_ is None:
             raise RuntimeError("Call fit() before predict_batch().")
 

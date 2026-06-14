@@ -144,14 +144,17 @@ def user_temporal_train_val_test_split(
 
 
 def global_mean(train: pd.DataFrame) -> float:
+    """Return the global mean rating over the given ratings."""
     return float(train["rating"].mean())
 
 
 def user_mean_ratings(train: pd.DataFrame) -> pd.Series:
+    """Return a Series mapping each user_id to that user's mean rating."""
     return train.groupby("user_id")["rating"].mean()
 
 
 def item_mean_ratings(train: pd.DataFrame) -> pd.Series:
+    """Return a Series mapping each movie_id to that movie's mean rating."""
     return train.groupby("movie_id")["rating"].mean()
 
 

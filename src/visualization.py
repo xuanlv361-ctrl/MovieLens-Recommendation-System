@@ -31,6 +31,7 @@ def _ensure_figures_dir() -> Path:
 
 
 def save_current_figure(filename: str, dpi: int = 150) -> Path:
+    """Save the current matplotlib figure to the figures directory."""
     out = _ensure_figures_dir() / filename
     plt.tight_layout()
     try:
@@ -50,6 +51,7 @@ def plot_rating_distribution(
     ratings: pd.DataFrame,
     filename: str = "rating_distribution.png",
 ) -> Path:
+    """Plot the histogram of rating values."""
     fig, ax = plt.subplots()
     sns.histplot(ratings["rating"], bins=5, discrete=True, kde=True, ax=ax)
     ax.set_xlabel("Rating")
@@ -62,6 +64,7 @@ def plot_ratings_per_user(
     ratings: pd.DataFrame,
     filename: str = "ratings_per_user.png",
 ) -> Path:
+    """Plot the distribution of the number of ratings per user."""
     counts = ratings.groupby("user_id").size()
     fig, ax = plt.subplots()
     sns.histplot(counts, bins=50, log_scale=True, ax=ax)
@@ -75,6 +78,7 @@ def plot_ratings_per_movie(
     ratings: pd.DataFrame,
     filename: str = "ratings_per_movie.png",
 ) -> Path:
+    """Plot the distribution of the number of ratings per movie."""
     counts = ratings.groupby("movie_id").size()
     fig, ax = plt.subplots()
     sns.histplot(counts, bins=50, log_scale=True, ax=ax)
@@ -88,6 +92,7 @@ def plot_genre_counts(
     movies: pd.DataFrame,
     filename: str = "genre_counts.png",
 ) -> Path:
+    """Plot the number of movies per genre."""
     genre_cols = [col for col in movies.columns if col not in NON_GENRE_COLUMNS]
     if not genre_cols:
         return _ensure_figures_dir() / filename
@@ -124,6 +129,7 @@ def plot_predicted_vs_actual(
     max_points: int = 5000,
     random_state: int = RANDOM_STATE,
 ) -> Path:
+    """Plot predicted ratings against actual ratings for a model."""
     if filename is None:
         safe = model_name.lower().replace(" ", "_")
         filename = f"pred_vs_actual_{safe}.png"
@@ -324,6 +330,7 @@ def plot_error_by_rating(
     model_name: str,
     filename: str | None = None,
 ) -> Path:
+    """Plot prediction error grouped by the true rating value."""
     if filename is None:
         safe = model_name.lower().replace(" ", "_").replace("(", "").replace(")", "")
         filename = f"error_by_rating_{safe}.png"
@@ -348,6 +355,7 @@ def plot_residuals(
     model_name: str,
     filename: str | None = None,
 ) -> Path:
+    """Plot the distribution of prediction residuals for a model."""
     if filename is None:
         safe = model_name.lower().replace(" ", "_")
         filename = f"residuals_{safe}.png"

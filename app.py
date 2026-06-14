@@ -39,6 +39,11 @@ from src.i18n import (
 )
 from src.item_based_cf import ItemBasedCF
 from src.metrics import evaluate_topk, mae, rmse
+
+try:  # NeuralCF (PyTorch) is an optional dependency.
+    from src.neural_cf import NeuralCFRecommender
+except ImportError:  # pragma: no cover - torch not installed
+    NeuralCFRecommender = None
 from src.posters import (
     LOCAL_POSTER_DIR,
     build_local_poster_index,
@@ -103,6 +108,13 @@ def load_item_cf_configured(
 @st.cache_resource(show_spinner="正在训练 SVD 矩阵分解模型...")
 def load_svd_model(_ratings: pd.DataFrame, factors: int = 50) -> SVDRecommender:
     model = SVDRecommender(n_components=factors)
+    model.fit(_ratings)
+    return model
+
+
+@st.cache_resource(show_spinner="正在训练 NeuralCF 深度学习模型（首次运行需要训练，请稍候）...")
+def load_neural_cf(_ratings: pd.DataFrame, epochs: int = 20):
+    model = NeuralCFRecommender(epochs=epochs, random_state=42)
     model.fit(_ratings)
     return model
 
@@ -197,6 +209,8 @@ def algorithm_model(
         return load_user_cf(ratings, k=k, metric=metric)
     if algorithm == "SVD Matrix Factorization":
         return load_svd_model(ratings, factors=factors)
+    if algorithm == "NeuralCF" and NeuralCFRecommender is not None:
+        return load_neural_cf(ratings)
     return load_item_cf_configured(ratings, k=k, metric=metric)
 
 
@@ -221,6 +235,11 @@ def recommendation_explanation(algorithm: str) -> str:
             "**SVD Matrix Factorization** "
             "通过矩阵分解学习每个用户和每部电影的隐含特征（隐因子），"
             "并用这些隐因子计算你对未观看电影的预测评分，再按预测评分排序推荐。"
+        ),
+        "NeuralCF": (
+            "**NeuralCF（神经协同过滤）** "
+            "基于 PyTorch 构建，将用户与电影映射为嵌入向量并通过多层感知机（MLP）"
+            "学习两者之间的非线性交互，经端到端训练后预测你对未观看电影的评分，再按预测评分排序推荐。"
         ),
     }
     return explanations.get(
@@ -415,6 +434,8 @@ def evaluation_summary(_ratings: pd.DataFrame) -> pd.DataFrame:
         "Item-based CF": ItemBasedCF(k=20).fit(train),
         "SVD": SVDRecommender(n_components=50).fit(train),
     }
+    if NeuralCFRecommender is not None:
+        models["NeuralCF"] = NeuralCFRecommender(epochs=20, random_state=42).fit(train)
     rows = []
     y_true = test_sample["rating"].to_numpy(dtype=float)
     for name, model in models.items():
@@ -437,7 +458,7 @@ def ranking_evaluation_summary(
     k: int = 10,
     n_users: int = 60,
 ) -> pd.DataFrame:
-    """Compare UserCF / ItemCF / SVD / Hybrid / Baseline on rating-error and top-k ranking metrics.
+    """Compare UserCF / ItemCF / SVD / Hybrid / Baseline / NeuralCF on rating-error and top-k ranking metrics.
 
     Ranking metrics are computed for a sampled subset of users against a
     candidate pool (popular movies + each user's relevant test items) to keep
@@ -455,6 +476,8 @@ def ranking_evaluation_summary(
         "Hybrid": MetadataHybridRegressor().fit(train, _movies),
         "Baseline": BiasBaseline(n_epochs=20, reg=1.0).fit(train),
     }
+    if NeuralCFRecommender is not None:
+        models["NeuralCF"] = NeuralCFRecommender(epochs=20, random_state=42).fit(train)
 
     popular_movie_ids = (
         train.groupby("movie_id")["rating"].count().sort_values(ascending=False).head(300).index.tolist()
@@ -2936,6 +2959,7 @@ def render_landing_page(ratings: pd.DataFrame, movies: pd.DataFrame) -> None:
                     <span class="landing-badge">UserCF</span>
                     <span class="landing-badge">ItemCF</span>
                     <span class="landing-badge">SVD</span>
+                    <span class="landing-badge">NeuralCF</span>
                 </div>
                 <div class="landing-hero-actions">
                     <a class="landing-hero-btn" href="?entry=user" target="_self">{T['landing_user_button']}</a>
@@ -3075,13 +3099,13 @@ def render_hero(ratings: pd.DataFrame, movies: pd.DataFrame) -> None:
                 <h1>FilmTrace 电影推荐系统</h1>
                 <p>
                     Predict Ratings. Discover Movies. Explore Recommendation Algorithms.<br>
-                    基于 MovieLens 100K 数据集构建 · UserCF · ItemCF · SVD · Hybrid Recommendation
+                    基于 MovieLens 100K 数据集构建 · UserCF · ItemCF · SVD · Hybrid · NeuralCF
                 </p>
                 <div class="pill-row">
                     <span class="pill">{ratings['user_id'].nunique():,} 位用户</span>
                     <span class="pill">{movies['movie_id'].nunique():,} 部电影</span>
                     <span class="pill">{len(ratings):,} 条评分</span>
-                    <span class="pill">UserCF · ItemCF · SVD · Hybrid</span>
+                    <span class="pill">UserCF · ItemCF · SVD · Hybrid · NeuralCF</span>
                 </div>
             </div>
         </section>
@@ -3246,6 +3270,7 @@ def render_capability_cards() -> None:
         ("ItemCF", "基于物品-物品相似度，查找与目标电影评分模式相近的其他电影。"),
         ("SVD", "通过矩阵分解学习用户与电影的潜在因子，预测精度最高。"),
         ("Hybrid Model", "结合协同过滤与电影元数据特征的混合推荐模型，缓解冷启动问题。"),
+        ("NeuralCF", "基于 PyTorch 的神经协同过滤，用嵌入向量与多层感知机建模用户-电影非线性交互。"),
         ("推荐评估", "基于 RMSE / MAE / Precision@K / Recall@K / NDCG@K 等指标系统评估各算法。"),
         ("数据可视化", "评分分布、用户行为、电影类型分布等多维度可视化分析。"),
         ("冷启动分析", "分析新用户 / 新电影在评分数据不足时的推荐表现。"),
@@ -3934,7 +3959,8 @@ def render_for_you_page(
                 "Item-based Collaborative Filtering",
                 "User-based Collaborative Filtering",
                 "SVD Matrix Factorization",
-            ],
+            ]
+            + (["NeuralCF"] if NeuralCFRecommender is not None else []),
         )
         top_n = ctrl[1].selectbox(T["label_recommendation_count"], [5, 10, 20], index=1)
         k = ctrl[2].slider(T["label_neighbors_k"], 5, 50, int(st.session_state.get("admin_k", 20)), 5)
@@ -5066,7 +5092,7 @@ def render_profile_analytics_page(
             <div class="explain-body">
                 系统会综合你的注册偏好（<span class="accent">{html.escape(pref_text)}</span>）、
                 历史评分行为（共 <span class="accent">{n_ratings:,}</span> 条评分，平均 <span class="accent">{avg_text}</span>）
-                与相似用户的兴趣模式（协同过滤 UserCF / ItemCF / SVD），
+                与相似用户的兴趣模式（协同过滤 UserCF / ItemCF / SVD 及深度模型 NeuralCF），
                 优先推荐与你偏好类型相近、评分表现较高、且与相似用户口味一致的电影。
                 当前为你匹配的推荐方式为「<span class="accent">{html.escape(source_label)}</span>」。
             </div>
@@ -5501,7 +5527,7 @@ def render_admin_module(
             "User-based Collaborative Filtering",
             "SVD Matrix Factorization",
             "Hybrid",
-        ]
+        ] + (["NeuralCF"] if NeuralCFRecommender is not None else [])
         current_algorithm = st.session_state.get("admin_algorithm", algorithm_options[0])
         st.info(f"当前默认算法：**{current_algorithm}**")
 
@@ -5527,13 +5553,17 @@ def render_admin_module(
             st.success("当前算法配置已保存到会话状态。")
 
         st.markdown("#### 算法说明")
-        explain_cols = st.columns(4)
         explanations = [
             ("UserCF", "基于相似用户", "找到与目标用户兴趣相似的其他用户，根据这些用户的评分加权预测目标用户对电影的偏好。"),
             ("ItemCF", "基于相似电影", "根据电影之间的评分相似度，为用户推荐与其历史喜欢的电影相似的其他电影。"),
             ("SVD", "矩阵分解", "将用户-电影评分矩阵分解为隐因子矩阵，通过隐因子向量的内积预测缺失评分。"),
             ("Hybrid", "混合推荐", "结合协同过滤与电影元数据特征（类型、用户/电影统计特征），用回归模型综合预测评分。"),
         ]
+        if NeuralCFRecommender is not None:
+            explanations.append(
+                ("NeuralCF", "深度学习", "基于 PyTorch 的神经协同过滤，用用户/电影嵌入向量与多层感知机（MLP）建模非线性交互，经端到端训练预测评分。")
+            )
+        explain_cols = st.columns(len(explanations))
         for col, (name, subtitle, desc) in zip(explain_cols, explanations):
             with col:
                 render_html_block(

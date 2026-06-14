@@ -63,7 +63,7 @@ T: dict[str, str] = {
     "landing_subtitle": "智能电影推荐平台",
     "landing_description": (
         "基于 MovieLens 100K 数据集构建的智能电影推荐系统，"
-        "融合 UserCF、ItemCF、SVD 与数据分析能力，帮助用户发现感兴趣的电影。"
+        "融合 UserCF、ItemCF、SVD、NeuralCF 与数据分析能力，帮助用户发现感兴趣的电影。"
     ),
     "landing_user_button": "进入用户系统",
     "landing_admin_button": "进入管理员后台",

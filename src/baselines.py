@@ -17,13 +17,16 @@ class GlobalMeanBaseline:
         self.global_mean_: float = 0.0
 
     def fit(self, train: pd.DataFrame) -> GlobalMeanBaseline:
+        """Fit the model on the training ratings and return self."""
         self.global_mean_ = global_mean(train)
         return self
 
     def predict(self, user_id: int, movie_id: int) -> float:
+        """Return the predicted rating for the given (user_id, movie_id)."""
         return self.global_mean_
 
     def predict_batch(self, test: pd.DataFrame) -> np.ndarray:
+        """Return predicted ratings for every (user_id, movie_id) row in the input."""
         return np.full(len(test), self.global_mean_, dtype=float)
 
 
@@ -35,16 +38,19 @@ class UserMeanBaseline:
         self.user_means_: pd.Series | None = None
 
     def fit(self, train: pd.DataFrame) -> UserMeanBaseline:
+        """Fit the model on the training ratings and return self."""
         self.global_mean_ = global_mean(train)
         self.user_means_ = train.groupby("user_id")["rating"].mean()
         return self
 
     def predict(self, user_id: int, movie_id: int) -> float:
+        """Return the predicted rating for the given (user_id, movie_id)."""
         if self.user_means_ is None:
             raise RuntimeError("Call fit() before predict().")
         return float(self.user_means_.get(user_id, self.global_mean_))
 
     def predict_batch(self, test: pd.DataFrame) -> np.ndarray:
+        """Return predicted ratings for every (user_id, movie_id) row in the input."""
         return np.array(
             [
                 self.predict(int(row.user_id), int(row.movie_id))
@@ -62,16 +68,19 @@ class ItemMeanBaseline:
         self.item_means_: pd.Series | None = None
 
     def fit(self, train: pd.DataFrame) -> ItemMeanBaseline:
+        """Fit the model on the training ratings and return self."""
         self.global_mean_ = global_mean(train)
         self.item_means_ = train.groupby("movie_id")["rating"].mean()
         return self
 
     def predict(self, user_id: int, movie_id: int) -> float:
+        """Return the predicted rating for the given (user_id, movie_id)."""
         if self.item_means_ is None:
             raise RuntimeError("Call fit() before predict().")
         return float(self.item_means_.get(movie_id, self.global_mean_))
 
     def predict_batch(self, test: pd.DataFrame) -> np.ndarray:
+        """Return predicted ratings for every (user_id, movie_id) row in the input."""
         return np.array(
             [
                 self.predict(int(row.user_id), int(row.movie_id))
@@ -103,6 +112,7 @@ class BiasBaseline:
         self.item_bias_: dict[int, float] = {}
 
     def fit(self, train: pd.DataFrame) -> BiasBaseline:
+        """Fit the model on the training ratings and return self."""
         self.global_mean_ = global_mean(train)
         user_groups = {
             int(user_id): group[["movie_id", "rating"]].copy()
@@ -139,6 +149,7 @@ class BiasBaseline:
         return self
 
     def predict(self, user_id: int, movie_id: int) -> float:
+        """Return the predicted rating for the given (user_id, movie_id)."""
         pred = (
             self.global_mean_
             + self.user_bias_.get(user_id, 0.0)
@@ -147,6 +158,7 @@ class BiasBaseline:
         return float(clip_predictions(np.array([pred]), *RATING_SCALE)[0])
 
     def predict_batch(self, test: pd.DataFrame) -> np.ndarray:
+        """Return predicted ratings for every (user_id, movie_id) row in the input."""
         return np.array(
             [
                 self.predict(int(row.user_id), int(row.movie_id))
@@ -164,16 +176,19 @@ class RandomRatingBaseline:
         self.rng_: np.random.Generator | None = None
 
     def fit(self, train: pd.DataFrame) -> RandomRatingBaseline:
+        """Fit the model on the training ratings and return self."""
         self.rng_ = np.random.default_rng(self.random_state)
         return self
 
     def predict(self, user_id: int, movie_id: int) -> float:
+        """Return the predicted rating for the given (user_id, movie_id)."""
         if self.rng_ is None:
             raise RuntimeError("Call fit() before predict().")
         low, high = RATING_SCALE
         return float(self.rng_.integers(low, high + 1))
 
     def predict_batch(self, test: pd.DataFrame) -> np.ndarray:
+        """Return predicted ratings for every (user_id, movie_id) row in the input."""
         if self.rng_ is None:
             raise RuntimeError("Call fit() before predict_batch().")
         low, high = RATING_SCALE
@@ -190,6 +205,7 @@ class MostPopularBaseline:
         self.user_history_: dict[int, set[int]] = {}
 
     def fit(self, train: pd.DataFrame) -> MostPopularBaseline:
+        """Fit the model on the training ratings and return self."""
         popularity = (
             train.groupby("movie_id")
             .agg(rating_count=("rating", "size"), mean_rating=("rating", "mean"))
@@ -205,9 +221,11 @@ class MostPopularBaseline:
         return self
 
     def recommend(self, user_id: int, k: int = 10) -> list[int]:
+        """Return the top-N recommended movie ids for the given user."""
         seen = self.user_history_.get(user_id, set())
         recs = [movie_id for movie_id in self.ranked_items_ if movie_id not in seen]
         return recs[:k]
 
     def recommend_batch(self, user_ids: list[int], k: int = 10) -> dict[int, list[int]]:
+        """Return recommended movie ids for each user in the batch."""
         return {int(user_id): self.recommend(int(user_id), k=k) for user_id in user_ids}

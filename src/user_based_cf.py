@@ -30,6 +30,7 @@ class UserBasedCF:
         self._global_mean: float = 0.0
 
     def fit(self, train: pd.DataFrame) -> UserBasedCF:
+        """Fit the model on the training ratings and return self."""
         self._global_mean = global_mean(train)
         self._matrix = build_user_item_matrix(train, fill_value=np.nan)
         self._centered, self._user_means = mean_center_by_user(self._matrix)
@@ -41,6 +42,7 @@ class UserBasedCF:
         return self
 
     def predict(self, user_id: int, movie_id: int) -> float:
+        """Return the predicted rating for the given (user_id, movie_id)."""
         if self._matrix is None or self._sim is None or self._user_means is None:
             raise RuntimeError("Call fit() before predict().")
 
@@ -80,6 +82,7 @@ class UserBasedCF:
         return float(clip_predictions(np.array([pred]), *RATING_SCALE)[0])
 
     def predict_batch(self, test: pd.DataFrame) -> np.ndarray:
+        """Return predicted ratings for every (user_id, movie_id) row in the input."""
         preds = [
             self.predict(int(row.user_id), int(row.movie_id))
             for row in test.itertuples(index=False)

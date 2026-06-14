@@ -34,6 +34,7 @@ def hash_password(password: str, salt: str | None = None) -> str:
 
 
 def verify_password(password: str, stored_hash: str) -> bool:
+    """Return True if the plaintext password matches the stored hash."""
     salt, _, _ = stored_hash.partition("$")
     if not salt:
         return False
@@ -103,6 +104,7 @@ def authenticate_account(username_or_email: str, password: str, db_path: Path | 
 
 
 def get_account(account_id: int, db_path: Path | str = DB_PATH) -> dict | None:
+    """Return the account row for the given username, or None if it does not exist."""
     conn = get_connection(db_path)
     try:
         row = conn.execute("SELECT * FROM accounts WHERE account_id = ?", (int(account_id),)).fetchone()
@@ -112,6 +114,7 @@ def get_account(account_id: int, db_path: Path | str = DB_PATH) -> dict | None:
 
 
 def update_password(account_id: int, new_password: str, db_path: Path | str = DB_PATH) -> None:
+    """Update the stored password hash for the given account."""
     conn = get_connection(db_path)
     try:
         conn.execute(
@@ -162,6 +165,7 @@ def list_accounts(db_path: Path | str = DB_PATH) -> pd.DataFrame:
 
 
 def add_favorite(account_id: int, movie_id: int, db_path: Path | str = DB_PATH) -> None:
+    """Add a movie to the account's favorites."""
     conn = get_connection(db_path)
     try:
         conn.execute(
@@ -174,6 +178,7 @@ def add_favorite(account_id: int, movie_id: int, db_path: Path | str = DB_PATH) 
 
 
 def remove_favorite(account_id: int, movie_id: int, db_path: Path | str = DB_PATH) -> None:
+    """Remove a movie from the account's favorites."""
     conn = get_connection(db_path)
     try:
         conn.execute(
@@ -186,6 +191,7 @@ def remove_favorite(account_id: int, movie_id: int, db_path: Path | str = DB_PAT
 
 
 def list_favorites(account_id: int, db_path: Path | str = DB_PATH) -> list[int]:
+    """Return the list of movie ids favorited by the account."""
     conn = get_connection(db_path)
     try:
         rows = conn.execute(
@@ -198,6 +204,7 @@ def list_favorites(account_id: int, db_path: Path | str = DB_PATH) -> list[int]:
 
 
 def is_favorite(account_id: int, movie_id: int, db_path: Path | str = DB_PATH) -> bool:
+    """Return True if the movie is in the account's favorites."""
     conn = get_connection(db_path)
     try:
         row = conn.execute(
@@ -215,6 +222,7 @@ def is_favorite(account_id: int, movie_id: int, db_path: Path | str = DB_PATH) -
 def save_preferences(
     account_id: int, genres: list[str], seed_movie_ids: list[int], db_path: Path | str = DB_PATH
 ) -> None:
+    """Persist the account's selected genre preferences and seed movies."""
     conn = get_connection(db_path)
     try:
         conn.execute(
@@ -248,6 +256,7 @@ def list_preferences(db_path: Path | str = DB_PATH) -> pd.DataFrame:
 
 
 def get_preferences(account_id: int, db_path: Path | str = DB_PATH) -> dict | None:
+    """Return the stored genre preferences for the account, or None if unset."""
     conn = get_connection(db_path)
     try:
         row = conn.execute(
@@ -272,6 +281,7 @@ def save_profile(
     preferred_min_rating: float,
     db_path: Path | str = DB_PATH,
 ) -> None:
+    """Persist the computed user profile (top genres, year range, preferred rating)."""
     conn = get_connection(db_path)
     try:
         conn.execute(
@@ -294,6 +304,7 @@ def save_profile(
 
 
 def get_profile(account_id: int, db_path: Path | str = DB_PATH) -> dict | None:
+    """Return the stored user profile for the account, or None if unset."""
     conn = get_connection(db_path)
     try:
         row = conn.execute(

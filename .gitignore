@@ -28,3 +28,7 @@ Thumbs.db
 
 # Optional: uncomment to ignore generated figures
 # figures/*.png
+
+# Claude scratch / build workspace
+.tmp_extract/
+report/screenshot.zip

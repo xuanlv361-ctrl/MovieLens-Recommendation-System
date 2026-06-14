@@ -92,6 +92,7 @@ def calibrated_score_batch(
 
 
 def recommendation_reason(algorithm: str, genres: str) -> str:
+    """Return a natural-language recommendation reason for the given algorithm and genres."""
     name = algorithm.strip().lower()
     primary_genre = genres.split(",")[0].strip() if genres else "similar"
     if name in _USER_CF_NAMES:
@@ -102,10 +103,12 @@ def recommendation_reason(algorithm: str, genres: str) -> str:
 
 
 def genre_columns(movies: pd.DataFrame) -> list[str]:
+    """Return the list of genre indicator columns present in the movies frame."""
     return [col for col in movies.columns if col not in NON_GENRE_COLUMNS]
 
 
 def genre_text(movie_row: pd.Series, genre_cols: list[str]) -> str:
+    """Return a comma-separated genre string for one movie row."""
     genres = [genre for genre in genre_cols if int(movie_row.get(genre, 0) or 0) == 1]
     return ", ".join(genres) if genres else "Unknown"
 

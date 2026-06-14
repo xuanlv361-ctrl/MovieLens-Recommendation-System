@@ -16,3 +16,4 @@ dependencies:
   - pip
   - pip:
       - python-dotenv>=1.0,<2
+      - torch>=2.0,<3

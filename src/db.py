@@ -96,6 +96,7 @@ def migrate_schema(conn: sqlite3.Connection) -> None:
 
 
 def get_connection(db_path: Path | str = DB_PATH) -> sqlite3.Connection:
+    """Return a SQLite connection to the application database."""
     db_path = Path(db_path)
     db_path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(db_path)
@@ -127,6 +128,7 @@ def init_db(
 
 
 def seed_movies(movies_df: pd.DataFrame, conn: sqlite3.Connection | None = None) -> None:
+    """Seed the movies table from the cleaned MovieLens catalog."""
     owns_conn = conn is None
     conn = conn or get_connection()
     rows = [
@@ -143,6 +145,7 @@ def seed_movies(movies_df: pd.DataFrame, conn: sqlite3.Connection | None = None)
 
 
 def seed_ratings(ratings_df: pd.DataFrame, conn: sqlite3.Connection | None = None) -> None:
+    """Seed the ratings table from the cleaned MovieLens ratings."""
     owns_conn = conn is None
     conn = conn or get_connection()
     rating_rows = [
@@ -234,6 +237,7 @@ def update_movie(
 
 
 def delete_movie(movie_id: int, administrator: str, db_path: Path | str = DB_PATH) -> bool:
+    """Delete a movie and its dependent rows from the database."""
     conn = get_connection(db_path)
     try:
         cur = conn.execute("DELETE FROM movies WHERE movie_id = ?", (int(movie_id),))
@@ -322,6 +326,7 @@ def upsert_rating(
 
 
 def get_audit_log(limit: int = 200, db_path: Path | str = DB_PATH) -> pd.DataFrame:
+    """Return the administrator audit-log entries."""
     conn = get_connection(db_path)
     try:
         rows = conn.execute(
