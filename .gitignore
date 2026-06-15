@@ -32,3 +32,10 @@ Thumbs.db
 # Claude scratch / build workspace
 .tmp_extract/
 report/screenshot.zip
+
+# Word 临时/锁定文件
+~$*
+*.tmp
+# 打包提交产物
+/FilmTrace_项目4_分组5/
+/项目4_分组5_吕璇.zip
