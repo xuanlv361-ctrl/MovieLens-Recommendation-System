@@ -42,7 +42,10 @@ class NCFTrainer:
         checkpoint_path: str | None = None,
         experiment_logger=None,
     ) -> None:
-        self.model = model
+        # Keep the model and every batch on the trainer's requested device.
+        # Callers may pass a model that was previously trained on another
+        # device (for example CUDA) and then validate it on CPU.
+        self.model = model.to(device)
         self.train_loader = train_loader
         self.val_loader = val_loader
         self.criterion = criterion
